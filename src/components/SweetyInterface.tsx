@@ -177,7 +177,14 @@ const SweetyInterface = () => {
         </AnimatePresence>
 
         {messages.map((msg, i) => (
-          <SweetyMessage key={i} role={msg.role} content={msg.content} index={i} />
+          <SweetyMessage
+            key={i}
+            role={msg.role}
+            content={msg.content}
+            index={i}
+            isSpeaking={speakingId === `msg-${i}`}
+            onSpeak={() => speak(msg.content, `msg-${i}`)}
+          />
         ))}
 
         {isLoading && messages[messages.length - 1]?.role === "user" && (
