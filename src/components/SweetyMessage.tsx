@@ -1,13 +1,16 @@
 import { motion } from "framer-motion";
 import ReactMarkdown from "react-markdown";
+import { Volume2, VolumeX } from "lucide-react";
 
 interface SweetyMessageProps {
   role: "user" | "assistant";
   content: string;
   index: number;
+  isSpeaking?: boolean;
+  onSpeak?: () => void;
 }
 
-const SweetyMessage = ({ role, content, index }: SweetyMessageProps) => {
+const SweetyMessage = ({ role, content, index, isSpeaking, onSpeak }: SweetyMessageProps) => {
   const isUser = role === "user";
 
   return (
@@ -25,8 +28,21 @@ const SweetyMessage = ({ role, content, index }: SweetyMessageProps) => {
         }`}
       >
         {!isUser && (
-          <div className="text-primary font-mono text-xs tracking-widest uppercase mb-2 glow-gold">
-            SWEETY
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-primary font-mono text-xs tracking-widest uppercase glow-gold">
+              SWEETY
+            </div>
+            <button
+              onClick={onSpeak}
+              className="p-1 text-muted-foreground hover:text-primary transition-colors"
+              aria-label={isSpeaking ? "Stop speaking" : "Read aloud"}
+            >
+              {isSpeaking ? (
+                <VolumeX className="w-3.5 h-3.5" />
+              ) : (
+                <Volume2 className="w-3.5 h-3.5" />
+              )}
+            </button>
           </div>
         )}
         <div
