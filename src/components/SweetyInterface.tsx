@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import SweetyWaveform from "./SweetyWaveform";
 import SweetyInput from "./SweetyInput";
 import SweetyMessage from "./SweetyMessage";
+import { useSpeech } from "@/hooks/useSpeech";
 import { toast } from "sonner";
 
 type Msg = { role: "user" | "assistant"; content: string };
