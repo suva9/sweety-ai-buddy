@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import SweetyWaveform from "./SweetyWaveform";
 import SweetyInput from "./SweetyInput";
 import SweetyMessage from "./SweetyMessage";
+import { useSpeech } from "@/hooks/useSpeech";
 import { toast } from "sonner";
 
 type Msg = { role: "user" | "assistant"; content: string };
@@ -15,7 +16,7 @@ const SweetyInterface = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
-
+  const { speak, speakingId } = useSpeech();
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -176,7 +177,14 @@ const SweetyInterface = () => {
         </AnimatePresence>
 
         {messages.map((msg, i) => (
-          <SweetyMessage key={i} role={msg.role} content={msg.content} index={i} />
+          <SweetyMessage
+            key={i}
+            role={msg.role}
+            content={msg.content}
+            index={i}
+            isSpeaking={speakingId === `msg-${i}`}
+            onSpeak={() => speak(msg.content, `msg-${i}`)}
+          />
         ))}
 
         {isLoading && messages[messages.length - 1]?.role === "user" && (
