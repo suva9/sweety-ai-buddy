@@ -19,7 +19,8 @@ const SweetyInterface = () => {
   const [showWelcome, setShowWelcome] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { speak, speakingId } = useSpeech();
-  useEffect(() => {
+  const { memories, fetchMemories } = useMemories();
+
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
