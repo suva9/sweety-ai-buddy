@@ -143,8 +143,16 @@ const SweetyInterface = () => {
             v1.0 // ACTIVE
           </span>
         </div>
-        <div className="font-mono text-[10px] tracking-widest text-muted-foreground">
-          GEMINI CORE
+        <div className="flex items-center gap-3">
+          {memories.length > 0 && (
+            <div className="flex items-center gap-1.5 font-mono text-[10px] tracking-widest text-muted-foreground">
+              <Brain className="w-3 h-3 text-primary" />
+              {memories.length} memories
+            </div>
+          )}
+          <div className="font-mono text-[10px] tracking-widest text-muted-foreground">
+            GEMINI CORE
+          </div>
         </div>
       </motion.header>
 
