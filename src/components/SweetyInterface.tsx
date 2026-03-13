@@ -5,7 +5,9 @@ import SweetyWaveform from "./SweetyWaveform";
 import SweetyInput from "./SweetyInput";
 import SweetyMessage from "./SweetyMessage";
 import { useSpeech } from "@/hooks/useSpeech";
+import { useMemories } from "@/hooks/useMemories";
 import { toast } from "sonner";
+import { Brain } from "lucide-react";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -17,6 +19,8 @@ const SweetyInterface = () => {
   const [showWelcome, setShowWelcome] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { speak, speakingId } = useSpeech();
+  const { memories, fetchMemories } = useMemories();
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -104,6 +108,9 @@ const SweetyInterface = () => {
       if (assistantSoFar) {
         speak(assistantSoFar, `msg-${newMessages.length}`);
       }
+
+      // Refresh memories in case new ones were stored
+      fetchMemories();
     } catch (e) {
       console.error(e);
       toast.error("Connection to Sweety failed");
@@ -136,8 +143,16 @@ const SweetyInterface = () => {
             v1.0 // ACTIVE
           </span>
         </div>
-        <div className="font-mono text-[10px] tracking-widest text-muted-foreground">
-          GEMINI CORE
+        <div className="flex items-center gap-3">
+          {memories.length > 0 && (
+            <div className="flex items-center gap-1.5 font-mono text-[10px] tracking-widest text-muted-foreground">
+              <Brain className="w-3 h-3 text-primary" />
+              {memories.length} memories
+            </div>
+          )}
+          <div className="font-mono text-[10px] tracking-widest text-muted-foreground">
+            GEMINI CORE
+          </div>
         </div>
       </motion.header>
 
