@@ -99,6 +99,11 @@ const SweetyInterface = () => {
           }
         }
       }
+
+      // Auto-speak the completed response like JARVIS
+      if (assistantSoFar) {
+        speak(assistantSoFar, `msg-${newMessages.length}`);
+      }
     } catch (e) {
       console.error(e);
       toast.error("Connection to Sweety failed");
