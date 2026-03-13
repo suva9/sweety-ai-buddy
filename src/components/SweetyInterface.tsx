@@ -108,6 +108,9 @@ const SweetyInterface = () => {
       if (assistantSoFar) {
         speak(assistantSoFar, `msg-${newMessages.length}`);
       }
+
+      // Refresh memories in case new ones were stored
+      fetchMemories();
     } catch (e) {
       console.error(e);
       toast.error("Connection to Sweety failed");
