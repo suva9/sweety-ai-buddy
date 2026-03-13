@@ -21,6 +21,7 @@ const SweetyInterface = () => {
   const { speak, speakingId } = useSpeech();
   const { memories, fetchMemories } = useMemories();
 
+  useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
