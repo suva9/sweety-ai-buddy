@@ -5,7 +5,9 @@ import SweetyWaveform from "./SweetyWaveform";
 import SweetyInput from "./SweetyInput";
 import SweetyMessage from "./SweetyMessage";
 import { useSpeech } from "@/hooks/useSpeech";
+import { useMemories } from "@/hooks/useMemories";
 import { toast } from "sonner";
+import { Brain } from "lucide-react";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
