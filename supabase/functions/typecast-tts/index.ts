@@ -47,6 +47,7 @@ serve(async (req) => {
       body: JSON.stringify({
         voice_id: voiceId,
         text: clean,
+        model: "ssfm-v21",
         language: /[\u0980-\u09FF]/.test(clean) ? "ben" : "eng",
       }),
     });
