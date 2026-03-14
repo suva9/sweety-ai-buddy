@@ -6,15 +6,12 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Detect if text contains Bengali characters
 function isBengali(text: string): boolean {
   return /[\u0980-\u09FF]/.test(text);
 }
 
-// Truncate text to reduce TTS latency — speak only the first ~400 chars
 function truncateForSpeech(text: string, maxLen = 400): string {
   if (text.length <= maxLen) return text;
-  // Try to cut at a sentence boundary
   const trimmed = text.slice(0, maxLen);
   const lastPeriod = Math.max(
     trimmed.lastIndexOf(". "),
@@ -35,7 +32,6 @@ serve(async (req) => {
     const TYPECAST_API_KEY = Deno.env.get("TYPECAST_API_KEY");
     if (!TYPECAST_API_KEY) throw new Error("TYPECAST_API_KEY is not configured");
 
-    // Clean text for speech (strip markdown)
     let clean = text
       .replace(/#{1,6}\s/g, "")
       .replace(/\*\*(.*?)\*\*/g, "$1")
@@ -54,17 +50,13 @@ serve(async (req) => {
       });
     }
 
-    // Truncate for faster response
     clean = truncateForSpeech(clean);
 
-    const bengali = isBengali(clean);
-    const language = bengali ? "ben" : "eng";
-
-    // Use v2 API endpoint with language-appropriate voice
-    // For Bengali: try the same voice with ben language
     const voiceId = "tc_63edf3e806ab09dfc7719403";
+    const bengali = isBengali(clean);
 
-    const ttsResponse = await fetch("https://api.typecast.ai/v2/text-to-speech", {
+    // Try with detected language first
+    let ttsResponse = await fetch("https://api.typecast.ai/v1/text-to-speech", {
       method: "POST",
       headers: {
         "X-API-KEY": TYPECAST_API_KEY,
@@ -73,63 +65,32 @@ serve(async (req) => {
       body: JSON.stringify({
         voice_id: voiceId,
         text: clean,
-        model: "ssfm-v30",
-        language,
+        model: "ssfm-v21",
+        language: bengali ? "ben" : "eng",
       }),
     });
 
+    // If Bengali fails, retry with English
+    if (!ttsResponse.ok && bengali) {
+      console.error("Bengali TTS failed, retrying with eng...");
+      ttsResponse = await fetch("https://api.typecast.ai/v1/text-to-speech", {
+        method: "POST",
+        headers: {
+          "X-API-KEY": TYPECAST_API_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          voice_id: voiceId,
+          text: clean,
+          model: "ssfm-v21",
+          language: "eng",
+        }),
+      });
+    }
+
     if (!ttsResponse.ok) {
       const errorText = await ttsResponse.text();
-      console.error("Typecast v2 API error:", ttsResponse.status, errorText);
-
-      // If Bengali fails on this voice, retry with English
-      if (bengali) {
-        console.log("Bengali TTS failed, retrying with English...");
-        const retryResponse = await fetch("https://api.typecast.ai/v2/text-to-speech", {
-          method: "POST",
-          headers: {
-            "X-API-KEY": TYPECAST_API_KEY,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            voice_id: voiceId,
-            text: clean,
-            model: "ssfm-v30",
-            language: "eng",
-          }),
-        });
-
-        if (retryResponse.ok) {
-          const audioBuffer = await retryResponse.arrayBuffer();
-          return new Response(audioBuffer, {
-            headers: { ...corsHeaders, "Content-Type": "audio/wav" },
-          });
-        }
-        
-        // If v2 also fails, try v1 as final fallback
-        console.log("v2 retry failed, trying v1...");
-        const v1Response = await fetch("https://api.typecast.ai/v1/text-to-speech", {
-          method: "POST",
-          headers: {
-            "X-API-KEY": TYPECAST_API_KEY,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            voice_id: voiceId,
-            text: clean,
-            model: "ssfm-v21",
-            language: "eng",
-          }),
-        });
-
-        if (v1Response.ok) {
-          const audioBuffer = await v1Response.arrayBuffer();
-          return new Response(audioBuffer, {
-            headers: { ...corsHeaders, "Content-Type": "audio/wav" },
-          });
-        }
-      }
-
+      console.error("Typecast API error:", ttsResponse.status, errorText);
       return new Response(
         JSON.stringify({ error: `Typecast API error: ${ttsResponse.status}` }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -137,12 +98,8 @@ serve(async (req) => {
     }
 
     const audioBuffer = await ttsResponse.arrayBuffer();
-
     return new Response(audioBuffer, {
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "audio/wav",
-      },
+      headers: { ...corsHeaders, "Content-Type": "audio/wav" },
     });
   } catch (e) {
     console.error("typecast-tts error:", e);
