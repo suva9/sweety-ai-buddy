@@ -104,9 +104,11 @@ const SweetyInterface = () => {
         }
       }
 
-      // Auto-speak the completed response like JARVIS
+      // Auto-speak the completed response like JARVIS (fire-and-forget)
       if (assistantSoFar) {
-        speak(assistantSoFar, `msg-${newMessages.length}`);
+        speak(assistantSoFar, `msg-${newMessages.length}`).catch(() => {
+          // TTS failure is non-critical, don't block the UI
+        });
       }
 
       // Refresh memories in case new ones were stored
