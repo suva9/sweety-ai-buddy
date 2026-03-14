@@ -2,3 +2,6 @@ project_id = "kmuxhfzbdnnbxugknvxl"
 
 [functions.sweety-chat]
 verify_jwt = false
+
+[functions.typecast-tts]
+verify_jwt = false
