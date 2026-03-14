@@ -22,21 +22,33 @@ Always sign off with a helpful follow-up question or suggestion.`;
 
 // Memory detection patterns
 const MEMORY_PATTERNS = [
-  { regex: /my name is\s+(.+)/i, type: "identity" },
-  { regex: /আমার নাম\s+(.+)/i, type: "identity" },
-  { regex: /call me\s+(.+)/i, type: "identity" },
-  { regex: /i(?:'m| am) interested in\s+(.+)/i, type: "interest" },
-  { regex: /i (?:like|love|enjoy)\s+(.+)/i, type: "interest" },
-  { regex: /আমি .+ পছন্দ করি/i, type: "interest" },
-  { regex: /my goal is\s+(.+)/i, type: "goal" },
-  { regex: /i want to\s+(.+)/i, type: "goal" },
-  { regex: /আমি .+ করতে চাই/i, type: "goal" },
-  { regex: /i(?:'m| am) a\s+(.+)/i, type: "identity" },
-  { regex: /i work (?:at|in|as)\s+(.+)/i, type: "identity" },
-  { regex: /my (?:favorite|fav)\s+\w+\s+is\s+(.+)/i, type: "preference" },
-  { regex: /i prefer\s+(.+)/i, type: "preference" },
-  { regex: /remember that\s+(.+)/i, type: "general" },
-  { regex: /মনে রাখো?\s+(.+)/i, type: "general" },
+  // Identity
+  { regex: /my name is\s+(.+)/i, type: "identity", extract: (m: string[]) => `User's name is ${m[1].trim()}` },
+  { regex: /আমার নাম\s+(.+)/i, type: "identity", extract: (m: string[]) => `User's name is ${m[1].trim()}` },
+  { regex: /call me\s+(.+)/i, type: "identity", extract: (m: string[]) => `User wants to be called ${m[1].trim()}` },
+  { regex: /i(?:'m| am) a\s+(.+)/i, type: "identity", extract: (m: string[]) => `User is a ${m[1].trim()}` },
+  { regex: /i work (?:at|in|as)\s+(.+)/i, type: "identity", extract: (m: string[]) => `User works ${m[0].match(/work (.+)/i)![1].trim()}` },
+
+  // Relationships
+  { regex: /(.+?)\s+is my\s+(best friend|friend|brother|sister|wife|husband|girlfriend|boyfriend|partner|father|mother|dad|mom|colleague|boss|mentor|loyal friend)/i, type: "relationship", extract: (m: string[]) => `${m[1].trim()} is the user's ${m[2].trim()}` },
+  { regex: /my\s+(best friend|friend|brother|sister|wife|husband|girlfriend|boyfriend|partner|father|mother|dad|mom|colleague|boss|mentor|loyal friend)\s+is\s+(.+)/i, type: "relationship", extract: (m: string[]) => `${m[2].trim()} is the user's ${m[1].trim()}` },
+  { regex: /(.+?)\s+আমার\s+(বন্ধু|ভাই|বোন|বাবা|মা|স্ত্রী|স্বামী)/i, type: "relationship", extract: (m: string[]) => `${m[1].trim()} is the user's ${m[2].trim()}` },
+
+  // Interests & Preferences
+  { regex: /i(?:'m| am) interested in\s+(.+)/i, type: "interest", extract: (m: string[]) => `User is interested in ${m[1].trim()}` },
+  { regex: /i (?:like|love|enjoy)\s+(.+)/i, type: "interest", extract: (m: string[]) => `User likes ${m[1].trim()}` },
+  { regex: /আমি (.+) পছন্দ করি/i, type: "interest", extract: (m: string[]) => `User likes ${m[1].trim()}` },
+  { regex: /my (?:favorite|fav)\s+(\w+)\s+is\s+(.+)/i, type: "preference", extract: (m: string[]) => `User's favorite ${m[1].trim()} is ${m[2].trim()}` },
+  { regex: /i prefer\s+(.+)/i, type: "preference", extract: (m: string[]) => `User prefers ${m[1].trim()}` },
+
+  // Goals
+  { regex: /my goal is\s+(.+)/i, type: "goal", extract: (m: string[]) => `User's goal is ${m[1].trim()}` },
+  { regex: /i want to\s+(.+)/i, type: "goal", extract: (m: string[]) => `User wants to ${m[1].trim()}` },
+  { regex: /আমি (.+) করতে চাই/i, type: "goal", extract: (m: string[]) => `User wants to ${m[1].trim()}` },
+
+  // General remember
+  { regex: /remember that\s+(.+)/i, type: "general", extract: (m: string[]) => m[1].trim() },
+  { regex: /মনে রাখো?\s+(.+)/i, type: "general", extract: (m: string[]) => m[1].trim() },
 ];
 
 function detectMemories(text: string): { content: string; type: string }[] {
@@ -44,8 +56,8 @@ function detectMemories(text: string): { content: string; type: string }[] {
   for (const pattern of MEMORY_PATTERNS) {
     const match = text.match(pattern.regex);
     if (match) {
-      memories.push({ content: text.trim(), type: pattern.type });
-      break; // one memory per message to avoid duplicates
+      memories.push({ content: pattern.extract(match), type: pattern.type });
+      break;
     }
   }
   return memories;
