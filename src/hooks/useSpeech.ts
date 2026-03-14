@@ -1,52 +1,78 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 export function useSpeech() {
   const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const stop = useCallback(() => {
-    window.speechSynthesis?.cancel();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      URL.revokeObjectURL(audioRef.current.src);
+      audioRef.current = null;
+    }
     setSpeakingId(null);
   }, []);
 
-  const speak = useCallback((text: string, id: string) => {
-    const synth = window.speechSynthesis;
-    if (!synth) return;
-
-    // If already speaking this message, stop it
-    if (synth.speaking) {
-      synth.cancel();
-      setSpeakingId(null);
-      // If toggling same message off, just return
-      if (speakingId === id) return;
+  const speak = useCallback(async (text: string, id: string) => {
+    // If already speaking this message, toggle off
+    if (speakingId === id) {
+      stop();
+      return;
     }
-
-    // Strip markdown for cleaner speech
-    const clean = text
-      .replace(/#{1,6}\s/g, "")
-      .replace(/\*\*(.*?)\*\*/g, "$1")
-      .replace(/\*(.*?)\*/g, "$1")
-      .replace(/`{1,3}[^`]*`{1,3}/g, "")
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-      .replace(/[-*]\s/g, "")
-      .replace(/\n{2,}/g, ". ")
-      .replace(/\n/g, " ")
-      .trim();
-
-    const utterance = new SpeechSynthesisUtterance(clean);
-    utterance.rate = 1;
-    utterance.pitch = 1;
-    utterance.lang = /[\u0980-\u09FF]/.test(clean) ? "bn-BD" : "en-US";
-
-    utterance.onend = () => setSpeakingId(null);
-    utterance.onerror = () => setSpeakingId(null);
+    // Stop any current playback
+    stop();
 
     setSpeakingId(id);
-    synth.speak(utterance);
-  }, [speakingId]);
+
+    try {
+      const ttsUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/typecast-tts`;
+      const response = await fetch(ttsUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!response.ok) {
+        console.error("TTS failed:", response.status);
+        setSpeakingId(null);
+        return;
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        audioRef.current = null;
+        setSpeakingId(null);
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(audioUrl);
+        audioRef.current = null;
+        setSpeakingId(null);
+      };
+
+      await audio.play();
+    } catch (e) {
+      console.error("TTS error:", e);
+      setSpeakingId(null);
+    }
+  }, [speakingId, stop]);
 
   // Cleanup on unmount
   useEffect(() => {
-    return () => { window.speechSynthesis?.cancel(); };
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        URL.revokeObjectURL(audioRef.current.src);
+      }
+    };
   }, []);
 
   return { speak, stop, speakingId };
