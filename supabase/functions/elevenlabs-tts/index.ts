@@ -19,7 +19,7 @@ function cleanForSpeech(text: string): string {
     .trim();
 }
 
-function truncate(text: string, max = 500): string {
+function truncate(text: string, max = 4000): string {
   if (text.length <= max) return text;
   const trimmed = text.slice(0, max);
   const last = Math.max(
