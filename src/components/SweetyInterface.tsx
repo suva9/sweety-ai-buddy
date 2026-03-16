@@ -158,6 +158,15 @@ const SweetyInterface = () => {
               {memories.length} memories
             </div>
           )}
+          <div
+            className={`flex items-center gap-1.5 font-mono text-[10px] tracking-widest ${
+              isConnected ? "text-primary" : "text-muted-foreground"
+            }`}
+            title={isConnected ? "Kodular connected" : "Kodular not detected (run inside Kodular WebView)"}
+          >
+            <Smartphone className="w-3 h-3" />
+            {isConnected ? "KODULAR" : "NO BRIDGE"}
+          </div>
           <button
             onClick={toggleMute}
             className="flex items-center gap-1.5 font-mono text-[10px] tracking-widest text-muted-foreground hover:text-primary transition-colors"
