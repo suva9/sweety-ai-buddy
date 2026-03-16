@@ -7,7 +7,8 @@ import SweetyMessage from "./SweetyMessage";
 import { useSpeech } from "@/hooks/useSpeech";
 import { useMemories } from "@/hooks/useMemories";
 import { toast } from "sonner";
-import { Brain, Volume2, VolumeX } from "lucide-react";
+import { Brain, Volume2, VolumeX, Smartphone } from "lucide-react";
+import { useKodularBridge } from "@/hooks/useKodularBridge";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -20,6 +21,7 @@ const SweetyInterface = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { speak, speakingId, muted, toggleMute } = useSpeech();
   const { memories, fetchMemories } = useMemories();
+  const { isConnected, parseAndExecute } = useKodularBridge();
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -104,11 +106,15 @@ const SweetyInterface = () => {
         }
       }
 
-      // Auto-speak the completed response like JARVIS (fire-and-forget)
+      // Auto-speak + check for Kodular app commands
       if (assistantSoFar) {
-        speak(assistantSoFar, `msg-${newMessages.length}`).catch(() => {
-          // TTS failure is non-critical, don't block the UI
-        });
+        // Parse for app open commands and send to Kodular
+        const executed = parseAndExecute(assistantSoFar);
+        if (executed) {
+          toast.success(`Kodular: "${executed}" command sent`);
+        }
+
+        speak(assistantSoFar, `msg-${newMessages.length}`).catch(() => {});
       }
 
       // Refresh memories in case new ones were stored
@@ -152,6 +158,15 @@ const SweetyInterface = () => {
               {memories.length} memories
             </div>
           )}
+          <div
+            className={`flex items-center gap-1.5 font-mono text-[10px] tracking-widest ${
+              isConnected ? "text-primary" : "text-muted-foreground"
+            }`}
+            title={isConnected ? "Kodular connected" : "Kodular not detected (run inside Kodular WebView)"}
+          >
+            <Smartphone className="w-3 h-3" />
+            {isConnected ? "KODULAR" : "NO BRIDGE"}
+          </div>
           <button
             onClick={toggleMute}
             className="flex items-center gap-1.5 font-mono text-[10px] tracking-widest text-muted-foreground hover:text-primary transition-colors"
