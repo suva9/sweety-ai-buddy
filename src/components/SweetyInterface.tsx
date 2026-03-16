@@ -7,7 +7,7 @@ import SweetyMessage from "./SweetyMessage";
 import { useSpeech } from "@/hooks/useSpeech";
 import { useMemories } from "@/hooks/useMemories";
 import { toast } from "sonner";
-import { Brain } from "lucide-react";
+import { Brain, Volume2, VolumeX } from "lucide-react";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -18,7 +18,7 @@ const SweetyInterface = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { speak, speakingId } = useSpeech();
+  const { speak, speakingId, muted, toggleMute } = useSpeech();
   const { memories, fetchMemories } = useMemories();
 
   useEffect(() => {
@@ -152,6 +152,14 @@ const SweetyInterface = () => {
               {memories.length} memories
             </div>
           )}
+          <button
+            onClick={toggleMute}
+            className="flex items-center gap-1.5 font-mono text-[10px] tracking-widest text-muted-foreground hover:text-primary transition-colors"
+            title={muted ? "Unmute Sweety" : "Mute Sweety"}
+          >
+            {muted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5 text-primary" />}
+            {muted ? "MUTED" : "VOICE"}
+          </button>
           <div className="font-mono text-[10px] tracking-widest text-muted-foreground">
             GEMINI CORE
           </div>
