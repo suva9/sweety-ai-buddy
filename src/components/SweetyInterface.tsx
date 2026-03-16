@@ -21,6 +21,7 @@ const SweetyInterface = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { speak, speakingId, muted, toggleMute } = useSpeech();
   const { memories, fetchMemories } = useMemories();
+  const { isConnected, parseAndExecute } = useKodularBridge();
 
   useEffect(() => {
     if (scrollRef.current) {
