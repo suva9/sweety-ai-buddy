@@ -106,11 +106,15 @@ const SweetyInterface = () => {
         }
       }
 
-      // Auto-speak the completed response like JARVIS (fire-and-forget)
+      // Auto-speak + check for Kodular app commands
       if (assistantSoFar) {
-        speak(assistantSoFar, `msg-${newMessages.length}`).catch(() => {
-          // TTS failure is non-critical, don't block the UI
-        });
+        // Parse for app open commands and send to Kodular
+        const executed = parseAndExecute(assistantSoFar);
+        if (executed) {
+          toast.success(`Kodular: "${executed}" command sent`);
+        }
+
+        speak(assistantSoFar, `msg-${newMessages.length}`).catch(() => {});
       }
 
       // Refresh memories in case new ones were stored
