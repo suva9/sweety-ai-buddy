@@ -48,38 +48,12 @@ export function useSpeech() {
     setSpeakingId(id);
 
     try {
-      // Try ElevenLabs first
-      const ttsUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`;
-      const response = await fetch(ttsUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({ text }),
-      });
-
-      if (!response.ok) {
-        console.warn("ElevenLabs failed, falling back to browser TTS");
-        throw new Error("ElevenLabs unavailable");
-      }
-
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-      audioRef.current = audio;
-      audio.onended = () => { URL.revokeObjectURL(audioUrl); audioRef.current = null; setSpeakingId(null); };
-      audio.onerror = () => { URL.revokeObjectURL(audioUrl); audioRef.current = null; setSpeakingId(null); };
-      await audio.play();
+      // Use browser TTS (ElevenLabs credits exhausted)
+      const utterance = await speakWithBrowser(text);
+      utterance.onend = () => setSpeakingId(null);
     } catch {
-      // Fallback: browser built-in TTS
-      try {
-        const utterance = await speakWithBrowser(text);
-        utterance.onend = () => setSpeakingId(null);
-      } catch {
-        console.error("Both TTS methods failed");
-        setSpeakingId(null);
-      }
+      console.error("TTS failed");
+      setSpeakingId(null);
     }
   }, [speakingId, stop]);
 
