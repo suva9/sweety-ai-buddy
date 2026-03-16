@@ -7,7 +7,8 @@ import SweetyMessage from "./SweetyMessage";
 import { useSpeech } from "@/hooks/useSpeech";
 import { useMemories } from "@/hooks/useMemories";
 import { toast } from "sonner";
-import { Brain, Volume2, VolumeX } from "lucide-react";
+import { Brain, Volume2, VolumeX, Smartphone } from "lucide-react";
+import { useKodularBridge } from "@/hooks/useKodularBridge";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
