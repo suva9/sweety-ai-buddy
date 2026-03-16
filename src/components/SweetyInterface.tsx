@@ -152,6 +152,14 @@ const SweetyInterface = () => {
               {memories.length} memories
             </div>
           )}
+          <button
+            onClick={toggleMute}
+            className="flex items-center gap-1.5 font-mono text-[10px] tracking-widest text-muted-foreground hover:text-primary transition-colors"
+            title={muted ? "Unmute Sweety" : "Mute Sweety"}
+          >
+            {muted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5 text-primary" />}
+            {muted ? "MUTED" : "VOICE"}
+          </button>
           <div className="font-mono text-[10px] tracking-widest text-muted-foreground">
             GEMINI CORE
           </div>
