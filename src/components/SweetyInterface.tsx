@@ -105,14 +105,7 @@ const SweetyInterface = () => {
         }
       }
 
-      // Auto-speak + check for Kodular app commands
       if (assistantSoFar) {
-        // Parse for app open commands and send to Kodular
-        const executed = parseAndExecute(assistantSoFar);
-        if (executed) {
-          toast.success(`Kodular: "${executed}" command sent`);
-        }
-
         speak(assistantSoFar, `msg-${newMessages.length}`).catch(() => {});
       }
 
