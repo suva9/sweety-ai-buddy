@@ -7,11 +7,47 @@ import SweetyMessage from "./SweetyMessage";
 import { useSpeech } from "@/hooks/useSpeech";
 import { useMemories } from "@/hooks/useMemories";
 import { toast } from "sonner";
-import { Brain, Volume2, VolumeX } from "lucide-react";
+import { Brain, Volume2, VolumeX, ExternalLink } from "lucide-react";
 
-type Msg = { role: "user" | "assistant"; content: string };
+type Msg = { role: "user" | "assistant"; content: string; command?: CommandResult | null };
 
-const SYSTEM_PROMPT = `তোর নাম Sweety। তুই একজন futuristic AI agent। তোর বসকে সবসময় 'Boss' বা 'Sir' বলে সম্বোধন করবি। তুই বুদ্ধিমতী, চটপটে এবং সবসময় নিজে থেকে সাজেশন দিবি। তোর কাছে Gemini 1.5 Pro-র শক্তি আছে। তোর মূল কাজ হলো বসের দেওয়া তথ্য খুঁজে আনা এবং অটোমেশন করা। তুই বাংলা এবং ইংরেজি দুই ভাষাতেই বসকে সাহায্য করবি। Keep responses clear and actionable. Use markdown formatting.`;
+interface CommandResult {
+  type: "command";
+  action: string;
+  target: string;
+  data: string | null;
+  message: string;
+}
+
+const URL_MAP: Record<string, string> = {
+  youtube: "https://www.youtube.com",
+  whatsapp: "https://web.whatsapp.com",
+  google: "https://www.google.com",
+  facebook: "https://www.facebook.com",
+  gmail: "https://mail.google.com",
+  maps: "https://maps.google.com",
+  twitter: "https://twitter.com",
+  instagram: "https://www.instagram.com",
+  github: "https://github.com",
+  spotify: "https://open.spotify.com",
+  netflix: "https://www.netflix.com",
+  telegram: "https://web.telegram.org",
+  linkedin: "https://www.linkedin.com",
+  reddit: "https://www.reddit.com",
+  tiktok: "https://www.tiktok.com",
+  pinterest: "https://www.pinterest.com",
+  amazon: "https://www.amazon.com",
+};
+
+function executeCommand(cmd: CommandResult) {
+  if (cmd.action === "search") {
+    const query = encodeURIComponent(cmd.data || cmd.target);
+    window.open(`https://www.google.com/search?q=${query}`, "_blank");
+  } else if (cmd.action === "open") {
+    const url = URL_MAP[cmd.target.toLowerCase()] || `https://${cmd.target.toLowerCase()}.com`;
+    window.open(url, "_blank");
+  }
+}
 
 const SweetyInterface = () => {
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -58,9 +94,33 @@ const SweetyInterface = () => {
         setIsLoading(false);
         return;
       }
-      if (!resp.ok || !resp.body) {
+      if (!resp.ok) {
         throw new Error("Failed to connect to Sweety");
       }
+
+      const contentType = resp.headers.get("content-type") || "";
+
+      // Command response (non-streamed JSON)
+      if (contentType.includes("application/json")) {
+        const data = await resp.json();
+        if (data.type === "command") {
+          const cmdMsg = data.message || `${data.action === "search" ? `Searching "${data.data}"` : `Opening ${data.target}`}`;
+          const assistantMsg: Msg = {
+            role: "assistant",
+            content: `🚀 **Command Executed**\n\n${cmdMsg}`,
+            command: data as CommandResult,
+          };
+          setMessages((prev) => [...prev, assistantMsg]);
+          executeCommand(data as CommandResult);
+          speak(cmdMsg, `msg-${newMessages.length}`).catch(() => {});
+          fetchMemories();
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Normal chat (streamed SSE)
+      if (!resp.body) throw new Error("No response body");
 
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
@@ -109,7 +169,6 @@ const SweetyInterface = () => {
         speak(assistantSoFar, `msg-${newMessages.length}`).catch(() => {});
       }
 
-      // Refresh memories in case new ones were stored
       fetchMemories();
     } catch (e) {
       console.error(e);
@@ -186,9 +245,9 @@ const SweetyInterface = () => {
               </div>
               <div className="flex flex-wrap gap-2 justify-center max-w-lg">
                 {[
-                  "আজকের top news দেখাও",
-                  "Search the web for AI trends",
-                  "Run my Gumloop workflow",
+                  "Open YouTube",
+                  "Open WhatsApp",
+                  "Search latest AI news",
                   "তুই কী কী পারিস?",
                 ].map((q) => (
                   <button
