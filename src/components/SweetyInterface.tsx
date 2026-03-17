@@ -94,9 +94,33 @@ const SweetyInterface = () => {
         setIsLoading(false);
         return;
       }
-      if (!resp.ok || !resp.body) {
+      if (!resp.ok) {
         throw new Error("Failed to connect to Sweety");
       }
+
+      const contentType = resp.headers.get("content-type") || "";
+
+      // Command response (non-streamed JSON)
+      if (contentType.includes("application/json")) {
+        const data = await resp.json();
+        if (data.type === "command") {
+          const cmdMsg = data.message || `${data.action === "search" ? `Searching "${data.data}"` : `Opening ${data.target}`}`;
+          const assistantMsg: Msg = {
+            role: "assistant",
+            content: `🚀 **Command Executed**\n\n${cmdMsg}`,
+            command: data as CommandResult,
+          };
+          setMessages((prev) => [...prev, assistantMsg]);
+          executeCommand(data as CommandResult);
+          speak(cmdMsg, `msg-${newMessages.length}`).catch(() => {});
+          fetchMemories();
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Normal chat (streamed SSE)
+      if (!resp.body) throw new Error("No response body");
 
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
@@ -145,7 +169,6 @@ const SweetyInterface = () => {
         speak(assistantSoFar, `msg-${newMessages.length}`).catch(() => {});
       }
 
-      // Refresh memories in case new ones were stored
       fetchMemories();
     } catch (e) {
       console.error(e);
