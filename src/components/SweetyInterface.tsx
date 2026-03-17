@@ -245,9 +245,9 @@ const SweetyInterface = () => {
               </div>
               <div className="flex flex-wrap gap-2 justify-center max-w-lg">
                 {[
-                  "আজকের top news দেখাও",
-                  "Search the web for AI trends",
-                  "Run my Gumloop workflow",
+                  "Open YouTube",
+                  "Open WhatsApp",
+                  "Search latest AI news",
                   "তুই কী কী পারিস?",
                 ].map((q) => (
                   <button
