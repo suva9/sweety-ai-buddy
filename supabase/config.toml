@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.elevenlabs-tts]
 verify_jwt = false
+
+[functions.api-command]
+verify_jwt = false
