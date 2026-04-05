@@ -76,7 +76,7 @@ const SweetyInterface = () => {
     if (terminalMatch) {
       const shellCmd = terminalMatch[1].trim();
       try {
-        const termResp = await fetch("https://9cb2da6b80af4e.lhr.life/command", {
+        const termResp = await fetch("https://james-uniprotkb-cyber-killing.trycloudflare.com/command", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ command: shellCmd }),
