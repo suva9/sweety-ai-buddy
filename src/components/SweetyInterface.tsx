@@ -71,6 +71,34 @@ const SweetyInterface = () => {
     setMessages(newMessages);
     setIsLoading(true);
 
+    // Intercept "run command: ..." for terminal/shell access
+    const terminalMatch = input.match(/^run\s+command:\s*(.+)$/i);
+    if (terminalMatch) {
+      const shellCmd = terminalMatch[1].trim();
+      try {
+        const termResp = await fetch("http://100.82.39.254:8080/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ command: shellCmd }),
+        });
+        const termData = await termResp.json();
+        const output = termData.output || termData.response || termData.result || JSON.stringify(termData);
+        const assistantMsg: Msg = {
+          role: "assistant",
+          content: `🖥️ **Terminal Output**\n\`\`\`\n${output}\n\`\`\``,
+        };
+        setMessages((prev) => [...prev, assistantMsg]);
+        speak(output, `msg-${newMessages.length}`).catch(() => {});
+      } catch (e) {
+        console.error("Terminal command failed:", e);
+        const errMsg = "Boss, terminal server এ connect করতে পারছি না। Server চালু আছে কিনা দেখুন।";
+        setMessages((prev) => [...prev, { role: "assistant", content: errMsg }]);
+        speak(errMsg, `msg-${newMessages.length}`).catch(() => {});
+      }
+      setIsLoading(false);
+      return;
+    }
+
     let assistantSoFar = "";
     const chatUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sweety-chat`;
 
