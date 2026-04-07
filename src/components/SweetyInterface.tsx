@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import SweetyWaveform from "./SweetyWaveform";
@@ -7,7 +7,8 @@ import SweetyMessage from "./SweetyMessage";
 import { useSpeech } from "@/hooks/useSpeech";
 import { useMemories } from "@/hooks/useMemories";
 import { toast } from "sonner";
-import { Brain, Volume2, VolumeX, ExternalLink } from "lucide-react";
+import { Brain, Volume2, VolumeX, Mic, MicOff } from "lucide-react";
+import { useWakeWord } from "@/hooks/useWakeWord";
 
 type Msg = { role: "user" | "assistant"; content: string; command?: CommandResult | null };
 
@@ -56,7 +57,31 @@ const SweetyInterface = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { speak, speakingId, muted, toggleMute } = useSpeech();
   const { memories, fetchMemories } = useMemories();
-  
+  const [wakeWordEnabled, setWakeWordEnabled] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("sweety-wakeword") !== "false";
+    }
+    return true;
+  });
+
+  const handleSendRef = useRef<(input: string) => void>();
+
+  const handleWakeCommand = useCallback((command: string) => {
+    handleSendRef.current?.(command);
+  }, []);
+
+  const { listening: wakeListening, wakeDetected } = useWakeWord({
+    onCommand: handleWakeCommand,
+    enabled: wakeWordEnabled && !isLoading,
+  });
+
+  const toggleWakeWord = useCallback(() => {
+    setWakeWordEnabled((prev) => {
+      const next = !prev;
+      localStorage.setItem("sweety-wakeword", String(next));
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -209,6 +234,9 @@ const SweetyInterface = () => {
     setIsLoading(false);
   };
 
+  // Keep ref updated for wake word callback
+  handleSendRef.current = handleSend;
+
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden">
       {/* Header */}
@@ -237,6 +265,16 @@ const SweetyInterface = () => {
               {memories.length} memories
             </div>
           )}
+          <button
+            onClick={toggleWakeWord}
+            className={`flex items-center gap-1.5 font-mono text-[10px] tracking-widest transition-colors ${
+              wakeWordEnabled ? "text-primary" : "text-muted-foreground hover:text-primary"
+            }`}
+            title={wakeWordEnabled ? "Disable wake word" : "Enable wake word"}
+          >
+            {wakeWordEnabled ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
+            {wakeWordEnabled ? (wakeDetected ? "HEARD!" : wakeListening ? "WAKE" : "WAKE") : "WAKE OFF"}
+          </button>
           <button
             onClick={toggleMute}
             className="flex items-center gap-1.5 font-mono text-[10px] tracking-widest text-muted-foreground hover:text-primary transition-colors"
