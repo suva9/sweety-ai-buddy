@@ -90,7 +90,6 @@ const SweetyInterface = () => {
   }, [messages]);
 
   const handleSend = async (input: string) => {
-    handleSendRef.current = handleSend;
     setShowWelcome(false);
     const userMsg: Msg = { role: "user", content: input };
     const newMessages = [...messages, userMsg];
