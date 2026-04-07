@@ -31,6 +31,7 @@ function normalizeTarget(value: string) {
     .toLowerCase()
     .trim()
     .replace(/^(the\s+)?(website|site|app)\s+/i, "")
+    .replace(/\s+(website|site|app)$/i, "")
     .replace(/\s+(please|now)$/i, "")
     .replace(/[.!?]+$/g, "")
     .trim();
@@ -63,7 +64,7 @@ export function executeCommand(cmd: CommandResult) {
 export function parseDirectCommand(input: string): CommandResult | null {
   const trimmed = input.trim();
 
-  const searchMatch = trimmed.match(/^(?:hey|hi|hello|ok|okay)\s+sweety\s+)?search\s+(.+)$/i);
+  const searchMatch = trimmed.match(/^(?:(?:hey|hi|hello|ok|okay)\s+sweety\s+)?search\s+(.+)$/i);
   if (searchMatch) {
     const query = searchMatch[1].replace(/\s+on\s+google$/i, "").trim();
     if (!query) return null;
@@ -77,7 +78,7 @@ export function parseDirectCommand(input: string): CommandResult | null {
     };
   }
 
-  const openMatch = trimmed.match(/^(?:hey|hi|hello|ok|okay)\s+sweety\s+)?(?:open|go to|visit|launch)\s+(.+)$/i);
+  const openMatch = trimmed.match(/^(?:(?:hey|hi|hello|ok|okay)\s+sweety\s+)?(?:open|go to|visit|launch)\s+(.+)$/i);
   if (openMatch) {
     const target = normalizeTarget(openMatch[1]);
     if (!target) return null;
