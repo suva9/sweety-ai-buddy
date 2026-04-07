@@ -64,8 +64,10 @@ const SweetyInterface = () => {
     return true;
   });
 
+  const handleSendRef = useRef<(input: string) => void>();
+
   const handleWakeCommand = useCallback((command: string) => {
-    handleSend(command);
+    handleSendRef.current?.(command);
   }, []);
 
   const { listening: wakeListening, wakeDetected } = useWakeWord({
