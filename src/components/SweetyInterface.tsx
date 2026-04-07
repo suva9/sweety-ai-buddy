@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { supabase } from "@/integrations/supabase/client";
 import SweetyWaveform from "./SweetyWaveform";
 import SweetyInput from "./SweetyInput";
 import SweetyMessage from "./SweetyMessage";
@@ -9,46 +8,9 @@ import { useMemories } from "@/hooks/useMemories";
 import { toast } from "sonner";
 import { Brain, Volume2, VolumeX, Mic, MicOff } from "lucide-react";
 import { useWakeWord } from "@/hooks/useWakeWord";
+import { CommandResult, executeCommand, parseDirectCommand } from "@/lib/commands";
 
 type Msg = { role: "user" | "assistant"; content: string; command?: CommandResult | null };
-
-interface CommandResult {
-  type: "command";
-  action: string;
-  target: string;
-  data: string | null;
-  message: string;
-}
-
-const URL_MAP: Record<string, string> = {
-  youtube: "https://www.youtube.com",
-  whatsapp: "https://web.whatsapp.com",
-  google: "https://www.google.com",
-  facebook: "https://www.facebook.com",
-  gmail: "https://mail.google.com",
-  maps: "https://maps.google.com",
-  twitter: "https://twitter.com",
-  instagram: "https://www.instagram.com",
-  github: "https://github.com",
-  spotify: "https://open.spotify.com",
-  netflix: "https://www.netflix.com",
-  telegram: "https://web.telegram.org",
-  linkedin: "https://www.linkedin.com",
-  reddit: "https://www.reddit.com",
-  tiktok: "https://www.tiktok.com",
-  pinterest: "https://www.pinterest.com",
-  amazon: "https://www.amazon.com",
-};
-
-function executeCommand(cmd: CommandResult) {
-  if (cmd.action === "search") {
-    const query = encodeURIComponent(cmd.data || cmd.target);
-    window.open(`https://www.google.com/search?q=${query}`, "_blank");
-  } else if (cmd.action === "open") {
-    const url = URL_MAP[cmd.target.toLowerCase()] || `https://${cmd.target.toLowerCase()}.com`;
-    window.open(url, "_blank");
-  }
-}
 
 const SweetyInterface = () => {
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -64,7 +26,7 @@ const SweetyInterface = () => {
     return true;
   });
 
-  const handleSendRef = useRef<(input: string) => void>();
+  const handleSendRef = useRef<((input: string) => void) | null>(null);
 
   const handleWakeCommand = useCallback((command: string) => {
     handleSendRef.current?.(command);
@@ -72,7 +34,8 @@ const SweetyInterface = () => {
 
   const { listening: wakeListening, wakeDetected } = useWakeWord({
     onCommand: handleWakeCommand,
-    enabled: wakeWordEnabled && !isLoading,
+    enabled: wakeWordEnabled,
+    paused: isLoading || Boolean(speakingId),
   });
 
   const toggleWakeWord = useCallback(() => {
@@ -90,14 +53,16 @@ const SweetyInterface = () => {
   }, [messages]);
 
   const handleSend = async (input: string) => {
+    const trimmedInput = input.trim();
+    if (!trimmedInput || isLoading) return;
+
     setShowWelcome(false);
-    const userMsg: Msg = { role: "user", content: input };
+    const userMsg: Msg = { role: "user", content: trimmedInput };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
     setIsLoading(true);
 
-    // Intercept "run command: ..." for terminal/shell access
-    const terminalMatch = input.match(/^run\s+command:\s*(.+)$/i);
+    const terminalMatch = trimmedInput.match(/^run\s+command:\s*(.+)$/i);
     if (terminalMatch) {
       const shellCmd = terminalMatch[1].trim();
       try {
@@ -106,6 +71,11 @@ const SweetyInterface = () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ command: shellCmd }),
         });
+
+        if (!termResp.ok) {
+          throw new Error(`Terminal server returned ${termResp.status}`);
+        }
+
         const termData = await termResp.json();
         const output = termData.output || termData.response || termData.result || JSON.stringify(termData);
         const assistantMsg: Msg = {
@@ -114,12 +84,26 @@ const SweetyInterface = () => {
         };
         setMessages((prev) => [...prev, assistantMsg]);
         speak(output, `msg-${newMessages.length}`).catch(() => {});
-      } catch (e) {
-        console.error("Terminal command failed:", e);
+      } catch (error) {
+        console.error("Terminal command failed:", error);
         const errMsg = "Boss, terminal server এ connect করতে পারছি না। Server চালু আছে কিনা দেখুন।";
         setMessages((prev) => [...prev, { role: "assistant", content: errMsg }]);
         speak(errMsg, `msg-${newMessages.length}`).catch(() => {});
       }
+      setIsLoading(false);
+      return;
+    }
+
+    const directCommand = parseDirectCommand(trimmedInput);
+    if (directCommand) {
+      const assistantMsg: Msg = {
+        role: "assistant",
+        content: `🚀 **Command Executed**\n\n${directCommand.message}`,
+        command: directCommand,
+      };
+      setMessages((prev) => [...prev, assistantMsg]);
+      executeCommand(directCommand);
+      speak(directCommand.message, `msg-${newMessages.length}`).catch(() => {});
       setIsLoading(false);
       return;
     }
@@ -142,37 +126,48 @@ const SweetyInterface = () => {
         setIsLoading(false);
         return;
       }
+
       if (resp.status === 402) {
         toast.error("Credits exhausted. Please add funds.");
         setIsLoading(false);
         return;
       }
+
       if (!resp.ok) {
         throw new Error("Failed to connect to Sweety");
       }
 
       const contentType = resp.headers.get("content-type") || "";
 
-      // Command response (non-streamed JSON)
       if (contentType.includes("application/json")) {
         const data = await resp.json();
+
         if (data.type === "command") {
-          const cmdMsg = data.message || `${data.action === "search" ? `Searching "${data.data}"` : `Opening ${data.target}`}`;
+          const command = data as CommandResult;
+          const cmdMsg = command.message || (command.action === "search" ? `Searching \"${command.data}\"` : `Opening ${command.target}`);
           const assistantMsg: Msg = {
             role: "assistant",
             content: `🚀 **Command Executed**\n\n${cmdMsg}`,
-            command: data as CommandResult,
+            command,
           };
           setMessages((prev) => [...prev, assistantMsg]);
-          executeCommand(data as CommandResult);
+          executeCommand(command);
           speak(cmdMsg, `msg-${newMessages.length}`).catch(() => {});
+          fetchMemories();
+          setIsLoading(false);
+          return;
+        }
+
+        if (data.type === "chat" && data.response) {
+          const assistantMsg: Msg = { role: "assistant", content: data.response };
+          setMessages((prev) => [...prev, assistantMsg]);
+          speak(data.response, `msg-${newMessages.length}`).catch(() => {});
           fetchMemories();
           setIsLoading(false);
           return;
         }
       }
 
-      // Normal chat (streamed SSE)
       if (!resp.body) throw new Error("No response body");
 
       const reader = resp.body.getReader();
@@ -184,8 +179,8 @@ const SweetyInterface = () => {
         setMessages((prev) => {
           const last = prev[prev.length - 1];
           if (last?.role === "assistant") {
-            return prev.map((m, i) =>
-              i === prev.length - 1 ? { ...m, content: assistantSoFar } : m
+            return prev.map((message, index) =>
+              index === prev.length - 1 ? { ...message, content: assistantSoFar } : message,
             );
           }
           return [...prev, { role: "assistant", content: assistantSoFar }];
@@ -205,14 +200,19 @@ const SweetyInterface = () => {
           if (line.endsWith("\r")) line = line.slice(0, -1);
           if (line.startsWith(":") || line.trim() === "") continue;
           if (!line.startsWith("data: ")) continue;
+
           const jsonStr = line.slice(6).trim();
-          if (jsonStr === "[DONE]") { streamDone = true; break; }
+          if (jsonStr === "[DONE]") {
+            streamDone = true;
+            break;
+          }
+
           try {
             const parsed = JSON.parse(jsonStr);
             const content = parsed.choices?.[0]?.delta?.content;
             if (content) upsertAssistant(content);
           } catch {
-            textBuffer = line + "\n" + textBuffer;
+            textBuffer = `${line}\n${textBuffer}`;
             break;
           }
         }
@@ -223,18 +223,17 @@ const SweetyInterface = () => {
       }
 
       fetchMemories();
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error(error);
       toast.error("Connection to Sweety failed");
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Boss, connection এ একটু সমস্যা হচ্ছে। আবার চেষ্টা করুন।" },
-      ]);
+      const fallbackText = "Boss, connection এ একটু সমস্যা হচ্ছে। আবার চেষ্টা করুন।";
+      setMessages((prev) => [...prev, { role: "assistant", content: fallbackText }]);
+      speak(fallbackText, `msg-${newMessages.length}`).catch(() => {});
     }
+
     setIsLoading(false);
   };
 
-  // Keep ref updated for wake word callback
   handleSendRef.current = handleSend;
 
   return (
