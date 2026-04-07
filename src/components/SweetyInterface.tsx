@@ -261,6 +261,16 @@ const SweetyInterface = () => {
             </div>
           )}
           <button
+            onClick={toggleWakeWord}
+            className={`flex items-center gap-1.5 font-mono text-[10px] tracking-widest transition-colors ${
+              wakeWordEnabled ? "text-primary" : "text-muted-foreground hover:text-primary"
+            }`}
+            title={wakeWordEnabled ? "Disable wake word" : "Enable wake word"}
+          >
+            {wakeWordEnabled ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
+            {wakeWordEnabled ? (wakeDetected ? "HEARD!" : wakeListening ? "WAKE" : "WAKE") : "WAKE OFF"}
+          </button>
+          <button
             onClick={toggleMute}
             className="flex items-center gap-1.5 font-mono text-[10px] tracking-widest text-muted-foreground hover:text-primary transition-colors"
             title={muted ? "Unmute Sweety" : "Mute Sweety"}
