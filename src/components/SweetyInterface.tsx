@@ -57,7 +57,29 @@ const SweetyInterface = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { speak, speakingId, muted, toggleMute } = useSpeech();
   const { memories, fetchMemories } = useMemories();
-  
+  const [wakeWordEnabled, setWakeWordEnabled] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("sweety-wakeword") !== "false";
+    }
+    return true;
+  });
+
+  const handleWakeCommand = useCallback((command: string) => {
+    handleSend(command);
+  }, []);
+
+  const { listening: wakeListening, wakeDetected } = useWakeWord({
+    onCommand: handleWakeCommand,
+    enabled: wakeWordEnabled && !isLoading,
+  });
+
+  const toggleWakeWord = useCallback(() => {
+    setWakeWordEnabled((prev) => {
+      const next = !prev;
+      localStorage.setItem("sweety-wakeword", String(next));
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
