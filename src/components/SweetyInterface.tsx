@@ -237,7 +237,7 @@ const SweetyInterface = () => {
   // Keep ref updated for wake word callback
   handleSendRef.current = handleSend;
 
-
+  return (
     <div className="flex flex-col h-screen bg-background overflow-hidden">
       {/* Header */}
       <motion.header
