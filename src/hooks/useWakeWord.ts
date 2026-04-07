@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
 interface UseWakeWordOptions {
   onCommand: (text: string) => void;
@@ -9,16 +9,21 @@ export function useWakeWord({ onCommand, enabled }: UseWakeWordOptions) {
   const [listening, setListening] = useState(false);
   const [wakeDetected, setWakeDetected] = useState(false);
   const recognitionRef = useRef<any>(null);
-  const restartTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const enabledRef = useRef(enabled);
+  const onCommandRef = useRef(onCommand);
+  const restartTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const isStoppingRef = useRef(false);
 
-  const getSpeechRecognition = useCallback(() => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return null;
-    return new SR();
-  }, []);
+  // Keep refs in sync without causing re-renders/restarts
+  enabledRef.current = enabled;
+  onCommandRef.current = onCommand;
 
-  const stopListening = useCallback(() => {
-    if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
+  const stop = useCallback(() => {
+    isStoppingRef.current = true;
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = undefined;
+    }
     if (recognitionRef.current) {
       try { recognitionRef.current.abort(); } catch {}
       recognitionRef.current = null;
@@ -27,44 +32,60 @@ export function useWakeWord({ onCommand, enabled }: UseWakeWordOptions) {
     setWakeDetected(false);
   }, []);
 
-  const startListening = useCallback(() => {
+  const start = useCallback(() => {
+    // Don't start if already running or intentionally stopped
     if (recognitionRef.current) return;
-    const recognition = getSpeechRecognition();
-    if (!recognition) return;
+    isStoppingRef.current = false;
 
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+
+    const recognition = new SR();
     recognition.continuous = true;
-    recognition.interimResults = true;
+    recognition.interimResults = false; // Only final results to avoid false triggers
     recognition.lang = "en-US";
+    recognition.maxAlternatives = 3;
 
-    recognition.onstart = () => setListening(true);
+    recognition.onstart = () => {
+      setListening(true);
+    };
 
     recognition.onresult = (event: any) => {
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript.toLowerCase().trim();
-        
-        // Check for wake word "sweety" in any result
-        if (transcript.includes("sweety") || transcript.includes("sweetie") || transcript.includes("sweet e")) {
-          if (event.results[i].isFinal) {
-            // Extract the command after the wake word
-            const fullText = event.results[i][0].transcript.trim();
-            // Remove wake word patterns
-            const command = fullText
-              .replace(/^(hey|hi|hello|ok|okay|yo)?\s*(sweety|sweetie|sweet e)/i, "")
-              .trim();
-            
-            if (command.length > 2) {
-              setWakeDetected(true);
-              onCommand(command);
-              // Brief pause then reset
-              setTimeout(() => setWakeDetected(false), 2000);
-            } else {
-              // Just the wake word, wait for more
-              setWakeDetected(true);
-              setTimeout(() => setWakeDetected(false), 3000);
-            }
-          } else {
-            setWakeDetected(true);
+        if (!event.results[i].isFinal) continue;
+
+        // Check all alternatives for wake word
+        let bestMatch = "";
+        for (let alt = 0; alt < event.results[i].length; alt++) {
+          const transcript = event.results[i][alt].transcript.toLowerCase().trim();
+          if (
+            transcript.includes("sweety") ||
+            transcript.includes("sweetie") ||
+            transcript.includes("sweet e") ||
+            transcript.includes("sweetly") ||
+            transcript.includes("suite e") ||
+            transcript.includes("sweating")
+          ) {
+            bestMatch = event.results[i][alt].transcript.trim();
+            break;
           }
+        }
+
+        if (!bestMatch) continue;
+
+        // Extract command: remove everything up to and including the wake word
+        const command = bestMatch
+          .replace(/^.*?\b(sweety|sweetie|sweet e|sweetly|suite e|sweating)\b[,.]?\s*/i, "")
+          .trim();
+
+        if (command.length > 1) {
+          setWakeDetected(true);
+          onCommandRef.current(command);
+          setTimeout(() => setWakeDetected(false), 2000);
+        } else {
+          // Just wake word alone - show detected briefly
+          setWakeDetected(true);
+          setTimeout(() => setWakeDetected(false), 3000);
         }
       }
     };
@@ -72,25 +93,32 @@ export function useWakeWord({ onCommand, enabled }: UseWakeWordOptions) {
     recognition.onend = () => {
       recognitionRef.current = null;
       setListening(false);
-      // Auto-restart if still enabled
-      if (enabled) {
-        restartTimeoutRef.current = setTimeout(() => {
-          startListening();
-        }, 300);
+      // Only auto-restart if we didn't intentionally stop
+      if (!isStoppingRef.current && enabledRef.current) {
+        restartTimerRef.current = setTimeout(() => {
+          if (enabledRef.current && !isStoppingRef.current) {
+            start();
+          }
+        }, 500);
       }
     };
 
     recognition.onerror = (event: any) => {
+      console.warn("Wake word recognition error:", event.error);
       recognitionRef.current = null;
       setListening(false);
+      // Don't restart on fatal errors
       if (event.error === "not-allowed" || event.error === "service-not-available") {
-        return; // Don't restart on permission errors
+        isStoppingRef.current = true;
+        return;
       }
-      // Auto-restart on other errors
-      if (enabled) {
-        restartTimeoutRef.current = setTimeout(() => {
-          startListening();
-        }, 1000);
+      // Restart with longer delay on errors
+      if (!isStoppingRef.current && enabledRef.current) {
+        restartTimerRef.current = setTimeout(() => {
+          if (enabledRef.current && !isStoppingRef.current) {
+            start();
+          }
+        }, 2000);
       }
     };
 
@@ -100,16 +128,16 @@ export function useWakeWord({ onCommand, enabled }: UseWakeWordOptions) {
     } catch {
       recognitionRef.current = null;
     }
-  }, [getSpeechRecognition, onCommand, enabled]);
+  }, []);
 
   useEffect(() => {
     if (enabled) {
-      startListening();
+      start();
     } else {
-      stopListening();
+      stop();
     }
-    return () => stopListening();
-  }, [enabled]);
+    return () => stop();
+  }, [enabled, start, stop]);
 
   return { listening, wakeDetected };
 }
