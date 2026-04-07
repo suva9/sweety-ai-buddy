@@ -7,7 +7,8 @@ import SweetyMessage from "./SweetyMessage";
 import { useSpeech } from "@/hooks/useSpeech";
 import { useMemories } from "@/hooks/useMemories";
 import { toast } from "sonner";
-import { Brain, Volume2, VolumeX, ExternalLink } from "lucide-react";
+import { Brain, Volume2, VolumeX, Mic, MicOff } from "lucide-react";
+import { useWakeWord } from "@/hooks/useWakeWord";
 
 type Msg = { role: "user" | "assistant"; content: string; command?: CommandResult | null };
 
