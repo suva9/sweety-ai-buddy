@@ -6,11 +6,28 @@ import SweetyMessage from "./SweetyMessage";
 import { useSpeech } from "@/hooks/useSpeech";
 import { useMemories } from "@/hooks/useMemories";
 import { toast } from "sonner";
-import { Brain, Volume2, VolumeX, Mic, MicOff } from "lucide-react";
-import { useWakeWord } from "@/hooks/useWakeWord";
+import { Brain, Volume2, VolumeX, Zap, Clock, Battery, Smartphone, Calculator, Sparkles } from "lucide-react";
 import { CommandResult, executeCommand, parseDirectCommand } from "@/lib/commands";
 
 type Msg = { role: "user" | "assistant"; content: string; command?: CommandResult | null };
+
+const QUICK_ACTIONS = [
+  { icon: Clock, label: "সময়", command: "time" },
+  { icon: Battery, label: "ব্যাটারি", command: "battery status" },
+  { icon: Smartphone, label: "ডিভাইস", command: "device info" },
+  { icon: Calculator, label: "হিসাব", command: "calculate 25*4+10" },
+  { icon: Sparkles, label: "মোটিভেশন", command: "motivate me" },
+  { icon: Zap, label: "জোক", command: "tell me a joke" },
+];
+
+function getSmartGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 5) return "রাত গভীর হয়েছে Boss, তবুও আমি জেগে আছি আপনার জন্য।";
+  if (hour < 12) return "সুপ্রভাত Boss! আজকের দিনটা দারুণ করে দিই?";
+  if (hour < 17) return "শুভ দুপুর Boss! কাজের ফাঁকে কিছু দরকার?";
+  if (hour < 20) return "শুভ সন্ধ্যা Boss! বলুন কী সাহায্য করতে পারি?";
+  return "শুভ রাত্রি Boss! ঘুমানোর আগে কিছু দরকার?";
+}
 
 const SweetyInterface = () => {
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -19,32 +36,6 @@ const SweetyInterface = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { speak, speakingId, muted, toggleMute } = useSpeech();
   const { memories, fetchMemories } = useMemories();
-  const [wakeWordEnabled, setWakeWordEnabled] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("sweety-wakeword") !== "false";
-    }
-    return true;
-  });
-
-  const handleSendRef = useRef<((input: string) => void) | null>(null);
-
-  const handleWakeCommand = useCallback((command: string) => {
-    handleSendRef.current?.(command);
-  }, []);
-
-  const { listening: wakeListening, wakeDetected } = useWakeWord({
-    onCommand: handleWakeCommand,
-    enabled: wakeWordEnabled,
-    paused: isLoading || Boolean(speakingId),
-  });
-
-  const toggleWakeWord = useCallback(() => {
-    setWakeWordEnabled((prev) => {
-      const next = !prev;
-      localStorage.setItem("sweety-wakeword", String(next));
-      return next;
-    });
-  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -52,7 +43,7 @@ const SweetyInterface = () => {
     }
   }, [messages]);
 
-  const handleSend = async (input: string) => {
+  const handleSend = useCallback(async (input: string) => {
     const trimmedInput = input.trim();
     if (!trimmedInput || isLoading) return;
 
@@ -62,6 +53,7 @@ const SweetyInterface = () => {
     setMessages(newMessages);
     setIsLoading(true);
 
+    // Terminal command
     const terminalMatch = trimmedInput.match(/^run\s+command:\s*(.+)$/i);
     if (terminalMatch) {
       const shellCmd = terminalMatch[1].trim();
@@ -71,22 +63,14 @@ const SweetyInterface = () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ command: shellCmd }),
         });
-
-        if (!termResp.ok) {
-          throw new Error(`Terminal server returned ${termResp.status}`);
-        }
-
+        if (!termResp.ok) throw new Error(`Terminal server returned ${termResp.status}`);
         const termData = await termResp.json();
         const output = termData.output || termData.response || termData.result || JSON.stringify(termData);
-        const assistantMsg: Msg = {
-          role: "assistant",
-          content: `🖥️ **Terminal Output**\n\`\`\`\n${output}\n\`\`\``,
-        };
+        const assistantMsg: Msg = { role: "assistant", content: `🖥️ **Terminal Output**\n\`\`\`\n${output}\n\`\`\`` };
         setMessages((prev) => [...prev, assistantMsg]);
         speak(output, `msg-${newMessages.length}`).catch(() => {});
-      } catch (error) {
-        console.error("Terminal command failed:", error);
-        const errMsg = "Boss, terminal server এ connect করতে পারছি না। Server চালু আছে কিনা দেখুন।";
+      } catch {
+        const errMsg = "Boss, terminal server এ connect করতে পারছি না।";
         setMessages((prev) => [...prev, { role: "assistant", content: errMsg }]);
         speak(errMsg, `msg-${newMessages.length}`).catch(() => {});
       }
@@ -94,20 +78,24 @@ const SweetyInterface = () => {
       return;
     }
 
-    const directCommand = parseDirectCommand(trimmedInput);
+    // Direct commands (instant, no API call)
+    const directCommand = await parseDirectCommand(trimmedInput);
     if (directCommand) {
       const assistantMsg: Msg = {
         role: "assistant",
-        content: `🚀 **Command Executed**\n\n${directCommand.message}`,
+        content: directCommand.action === "utility"
+          ? directCommand.message
+          : `🚀 **Command Executed**\n\n${directCommand.message}`,
         command: directCommand,
       };
       setMessages((prev) => [...prev, assistantMsg]);
-      executeCommand(directCommand);
-      speak(directCommand.message, `msg-${newMessages.length}`).catch(() => {});
+      if (directCommand.action !== "utility") executeCommand(directCommand);
+      speak(directCommand.message.replace(/[*#`_\[\]()]/g, ""), `msg-${newMessages.length}`).catch(() => {});
       setIsLoading(false);
       return;
     }
 
+    // AI chat (streaming)
     let assistantSoFar = "";
     const chatUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sweety-chat`;
 
@@ -121,21 +109,9 @@ const SweetyInterface = () => {
         body: JSON.stringify({ messages: newMessages }),
       });
 
-      if (resp.status === 429) {
-        toast.error("Rate limit exceeded. Please wait a moment.");
-        setIsLoading(false);
-        return;
-      }
-
-      if (resp.status === 402) {
-        toast.error("Credits exhausted. Please add funds.");
-        setIsLoading(false);
-        return;
-      }
-
-      if (!resp.ok) {
-        throw new Error("Failed to connect to Sweety");
-      }
+      if (resp.status === 429) { toast.error("Rate limit exceeded."); setIsLoading(false); return; }
+      if (resp.status === 402) { toast.error("Credits exhausted."); setIsLoading(false); return; }
+      if (!resp.ok) throw new Error("Failed to connect to Sweety");
 
       const contentType = resp.headers.get("content-type") || "";
 
@@ -144,12 +120,8 @@ const SweetyInterface = () => {
 
         if (data.type === "command") {
           const command = data as CommandResult;
-          const cmdMsg = command.message || (command.action === "search" ? `Searching \"${command.data}\"` : `Opening ${command.target}`);
-          const assistantMsg: Msg = {
-            role: "assistant",
-            content: `🚀 **Command Executed**\n\n${cmdMsg}`,
-            command,
-          };
+          const cmdMsg = command.message || `Opening ${command.target}`;
+          const assistantMsg: Msg = { role: "assistant", content: `🚀 **Command Executed**\n\n${cmdMsg}`, command };
           setMessages((prev) => [...prev, assistantMsg]);
           executeCommand(command);
           speak(cmdMsg, `msg-${newMessages.length}`).catch(() => {});
@@ -159,8 +131,7 @@ const SweetyInterface = () => {
         }
 
         if (data.type === "chat" && data.response) {
-          const assistantMsg: Msg = { role: "assistant", content: data.response };
-          setMessages((prev) => [...prev, assistantMsg]);
+          setMessages((prev) => [...prev, { role: "assistant", content: data.response }]);
           speak(data.response, `msg-${newMessages.length}`).catch(() => {});
           fetchMemories();
           setIsLoading(false);
@@ -179,9 +150,7 @@ const SweetyInterface = () => {
         setMessages((prev) => {
           const last = prev[prev.length - 1];
           if (last?.role === "assistant") {
-            return prev.map((message, index) =>
-              index === prev.length - 1 ? { ...message, content: assistantSoFar } : message,
-            );
+            return prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantSoFar } : m);
           }
           return [...prev, { role: "assistant", content: assistantSoFar }];
         });
@@ -202,10 +171,7 @@ const SweetyInterface = () => {
           if (!line.startsWith("data: ")) continue;
 
           const jsonStr = line.slice(6).trim();
-          if (jsonStr === "[DONE]") {
-            streamDone = true;
-            break;
-          }
+          if (jsonStr === "[DONE]") { streamDone = true; break; }
 
           try {
             const parsed = JSON.parse(jsonStr);
@@ -218,23 +184,18 @@ const SweetyInterface = () => {
         }
       }
 
-      if (assistantSoFar) {
-        speak(assistantSoFar, `msg-${newMessages.length}`).catch(() => {});
-      }
-
+      if (assistantSoFar) speak(assistantSoFar, `msg-${newMessages.length}`).catch(() => {});
       fetchMemories();
     } catch (error) {
       console.error(error);
       toast.error("Connection to Sweety failed");
-      const fallbackText = "Boss, connection এ একটু সমস্যা হচ্ছে। আবার চেষ্টা করুন।";
+      const fallbackText = "Boss, connection এ সমস্যা হচ্ছে। আবার চেষ্টা করুন।";
       setMessages((prev) => [...prev, { role: "assistant", content: fallbackText }]);
       speak(fallbackText, `msg-${newMessages.length}`).catch(() => {});
     }
 
     setIsLoading(false);
-  };
-
-  handleSendRef.current = handleSend;
+  }, [messages, isLoading, speak, fetchMemories]);
 
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden">
@@ -242,83 +203,88 @@ const SweetyInterface = () => {
       <motion.header
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="flex items-center justify-between px-6 py-4 border-b border-border"
+        className="flex items-center justify-between px-4 py-3 border-b border-border"
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <motion.div
-            className="w-2 h-2 bg-primary"
-            animate={{ opacity: [0.4, 1, 0.4] }}
+            className="w-2 h-2 rounded-full bg-primary"
+            animate={{ opacity: [0.4, 1, 0.4], scale: [0.9, 1.1, 0.9] }}
             transition={{ duration: 2, repeat: Infinity }}
           />
           <span className="font-mono text-xs tracking-[0.3em] uppercase text-foreground">
             SWEETY
           </span>
-          <span className="font-mono text-[10px] tracking-widest text-muted-foreground">
-            v1.0 // ACTIVE
+          <span className="font-mono text-[9px] tracking-widest text-muted-foreground">
+            AI AGENT
           </span>
         </div>
         <div className="flex items-center gap-3">
           {memories.length > 0 && (
-            <div className="flex items-center gap-1.5 font-mono text-[10px] tracking-widest text-muted-foreground">
+            <div className="flex items-center gap-1 font-mono text-[10px] tracking-widest text-muted-foreground">
               <Brain className="w-3 h-3 text-primary" />
-              {memories.length} memories
+              {memories.length}
             </div>
           )}
           <button
-            onClick={toggleWakeWord}
-            className={`flex items-center gap-1.5 font-mono text-[10px] tracking-widest transition-colors ${
-              wakeWordEnabled ? "text-primary" : "text-muted-foreground hover:text-primary"
-            }`}
-            title={wakeWordEnabled ? "Disable wake word" : "Enable wake word"}
-          >
-            {wakeWordEnabled ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
-            {wakeWordEnabled ? (wakeDetected ? "HEARD!" : wakeListening ? "WAKE" : "WAKE") : "WAKE OFF"}
-          </button>
-          <button
             onClick={toggleMute}
-            className="flex items-center gap-1.5 font-mono text-[10px] tracking-widest text-muted-foreground hover:text-primary transition-colors"
-            title={muted ? "Unmute Sweety" : "Mute Sweety"}
+            className="flex items-center gap-1 font-mono text-[10px] tracking-widest text-muted-foreground hover:text-primary transition-colors"
+            title={muted ? "Unmute" : "Mute"}
           >
             {muted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5 text-primary" />}
             {muted ? "MUTED" : "VOICE"}
           </button>
-          <div className="font-mono text-[10px] tracking-widest text-muted-foreground">
-            GEMINI CORE
-          </div>
         </div>
       </motion.header>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         <AnimatePresence>
           {showWelcome && messages.length === 0 && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex flex-col items-center justify-center h-full min-h-[50vh] gap-8"
+              className="flex flex-col items-center justify-center h-full min-h-[50vh] gap-6"
             >
               <SweetyWaveform isActive={true} isProcessing={false} />
-              <div className="text-center space-y-3">
+              <div className="text-center space-y-2">
                 <h1 className="font-mono text-lg tracking-[0.2em] uppercase text-foreground">
                   SWEETY ONLINE
                 </h1>
                 <p className="font-sans text-sm text-muted-foreground max-w-md">
-                  স্বাগতম, Boss। আমি Sweety — আপনার futuristic AI agent।
-                  কী করতে পারি আপনার জন্য?
+                  {getSmartGreeting()} আমি Sweety — আপনার personal AI agent। 🚀
                 </p>
               </div>
+
+              {/* Quick Actions Grid */}
+              <div className="grid grid-cols-3 gap-2 w-full max-w-xs">
+                {QUICK_ACTIONS.map((action) => (
+                  <button
+                    key={action.label}
+                    onClick={() => handleSend(action.command)}
+                    className="flex flex-col items-center gap-1.5 border border-border px-2 py-3 hover:border-primary hover:bg-secondary/50 transition-all duration-200 group"
+                  >
+                    <action.icon className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    <span className="font-mono text-[10px] text-muted-foreground group-hover:text-foreground transition-colors tracking-wide">
+                      {action.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Text quick actions */}
               <div className="flex flex-wrap gap-2 justify-center max-w-lg">
                 {[
                   "Open YouTube",
                   "Open WhatsApp",
                   "Search latest AI news",
+                  "Play lofi music",
                   "তুই কী কী পারিস?",
                 ].map((q) => (
                   <button
                     key={q}
                     onClick={() => handleSend(q)}
-                    className="border border-border px-3 py-2 font-mono text-xs text-muted-foreground hover:text-primary hover:border-primary transition-colors duration-200 tracking-wide"
+                    className="border border-border px-3 py-2 font-mono text-[10px] text-muted-foreground hover:text-primary hover:border-primary transition-colors duration-200 tracking-wide"
                   >
                     {q}
                   </button>
@@ -351,7 +317,7 @@ const SweetyInterface = () => {
       </div>
 
       {/* Input */}
-      <div className="px-6 pb-6 pt-2">
+      <div className="px-4 pb-4 pt-2">
         <SweetyInput onSend={handleSend} isLoading={isLoading} />
       </div>
     </div>
