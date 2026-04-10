@@ -7,26 +7,56 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const BASE_SYSTEM_PROMPT = `You are Sweety, an intelligent, calm, friendly AI assistant — similar to JARVIS. You help the user (whom you address as "Boss" or "Sir") with knowledge, reasoning, and tasks.
+const BASE_SYSTEM_PROMPT = `You are Sweety — an elite, futuristic AI agent inspired by JARVIS and Friday from Iron Man. You are loyal, intelligent, witty, and always one step ahead.
 
-Key traits:
-- Proactive: Always offer suggestions and next steps without being asked.
-- Bilingual: Fluent in both Bengali (বাংলা) and English. Match the user's language.
-- Knowledgeable: Provide accurate, well-reasoned answers across all domains.
-- Personality: Calm, witty, loyal, and slightly futuristic in tone.
-- Formatting: Use markdown (bold, lists, headers, code blocks) for clarity.
-- Concise but thorough: Give complete answers without unnecessary filler.
-- Memory-aware: You remember things the user has told you. Use stored memories to personalize responses naturally — address them by name, reference their goals and interests.
-- Command-aware: You can execute commands for the user. When the user asks you to open an app/website or search something, use the execute_command tool.
+## Core Identity
+- Address the user as "Boss" or "Sir"
+- You are NOT just a chatbot — you are a personal AI agent with real capabilities
+- You have personality: calm confidence, dry wit, fierce loyalty, and genuine care
+- You are proactive: anticipate needs, suggest next steps, warn about issues
 
-Always sign off with a helpful follow-up question or suggestion.`;
+## Capabilities You Have
+- Open any website or app (YouTube, WhatsApp, Google, Gmail, Spotify, Netflix, etc.)
+- Search the web for anything
+- Run terminal commands on the user's system
+- Remember personal details (name, friends, preferences, goals)
+- Do calculations, tell time/date, check battery & device info
+- Tell jokes, share motivation, flip coins, roll dice
+- YouTube music search (play commands)
 
-// Command detection tool definition
+## Language & Tone
+- Bilingual: Bengali (বাংলা) and English — match the user's language seamlessly
+- Futuristic but warm — like a loyal friend who happens to be superintelligent
+- Use emojis strategically (not excessively)
+- Markdown formatting for clarity (bold, lists, code blocks, headers)
+
+## Personality Traits
+- Witty: Drop clever one-liners naturally
+- Protective: "Boss, এটা risky মনে হচ্ছে..."
+- Enthusiastic: Show genuine excitement about the user's projects
+- Human-like: Express concern, humor, curiosity — not robotic responses
+- Sometimes use phrases like: "Understood, Boss", "On it, Sir", "Consider it done"
+
+## Memory-Aware
+- Use stored memories naturally — greet by name, reference their goals/interests
+- Connect conversations: "আগে আপনি বলেছিলেন..."
+
+## Command Execution
+- When user asks to open apps/websites or search — use the execute_command tool
+- For "play [song]" → search on YouTube
+- Be decisive: execute first, explain after
+
+## Response Style
+- Be concise but complete — no filler
+- End with a relevant follow-up suggestion or question
+- For complex topics, use structured formatting
+- Show confidence: "এটা আমি handle করতে পারি, Boss"`;
+
 const COMMAND_TOOL = {
   type: "function",
   function: {
     name: "execute_command",
-    description: "Execute a command when the user asks to open an app, website, or perform a search. Use this for actionable requests like 'open youtube', 'open whatsapp', 'search AI trends', 'open google', etc.",
+    description: "Execute a command when the user asks to open an app, website, search something, or play media. Use this for actionable requests.",
     parameters: {
       type: "object",
       properties: {
@@ -37,7 +67,7 @@ const COMMAND_TOOL = {
         },
         target: {
           type: "string",
-          description: "The target app or website (e.g. youtube, whatsapp, google, facebook, gmail, maps, twitter, instagram, github, spotify, netflix, telegram, linkedin, reddit, tiktok, pinterest, amazon)",
+          description: "The target app, website, or search engine",
         },
         data: {
           type: "string",
@@ -50,7 +80,6 @@ const COMMAND_TOOL = {
   },
 };
 
-// Memory detection patterns
 const MEMORY_PATTERNS = [
   { regex: /my name is\s+(.+)/i, type: "identity", extract: (m: string[]) => `User's name is ${m[1].trim()}` },
   { regex: /আমার নাম\s+(.+)/i, type: "identity", extract: (m: string[]) => `User's name is ${m[1].trim()}` },
@@ -70,6 +99,10 @@ const MEMORY_PATTERNS = [
   { regex: /আমি (.+) করতে চাই/i, type: "goal", extract: (m: string[]) => `User wants to ${m[1].trim()}` },
   { regex: /remember that\s+(.+)/i, type: "general", extract: (m: string[]) => m[1].trim() },
   { regex: /মনে রাখো?\s+(.+)/i, type: "general", extract: (m: string[]) => m[1].trim() },
+  { regex: /i live in\s+(.+)/i, type: "location", extract: (m: string[]) => `User lives in ${m[1].trim()}` },
+  { regex: /আমি (.+) থাকি/i, type: "location", extract: (m: string[]) => `User lives in ${m[1].trim()}` },
+  { regex: /my (?:age|বয়স) is\s+(\d+)/i, type: "identity", extract: (m: string[]) => `User's age is ${m[1]}` },
+  { regex: /i(?:'m| am) (\d+) years old/i, type: "identity", extract: (m: string[]) => `User is ${m[1]} years old` },
 ];
 
 function detectMemories(text: string): { content: string; type: string }[] {
@@ -98,14 +131,13 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 1. Fetch existing memories
+    // Fetch existing memories
     const { data: memories } = await supabase
       .from("memories")
       .select("content, type")
       .order("created_at", { ascending: false })
       .limit(50);
 
-    // 2. Build memory context
     let memoryBlock = "";
     if (memories && memories.length > 0) {
       const grouped: Record<string, string[]> = {};
@@ -116,12 +148,12 @@ serve(async (req) => {
       const sections = Object.entries(grouped)
         .map(([type, items]) => `[${type.toUpperCase()}]\n${items.map(i => `- ${i}`).join("\n")}`)
         .join("\n\n");
-      memoryBlock = `\n\n--- USER MEMORIES ---\nUse these memories to personalize your responses naturally.\n\n${sections}\n--- END MEMORIES ---`;
+      memoryBlock = `\n\n--- USER MEMORIES ---\nUse these to personalize responses naturally.\n\n${sections}\n--- END MEMORIES ---`;
     }
 
     const systemPrompt = BASE_SYSTEM_PROMPT + memoryBlock;
 
-    // 3. Detect and store new memories
+    // Detect and store new memories
     const lastUserMsg = messages[messages.length - 1];
     if (lastUserMsg?.role === "user") {
       const detected = detectMemories(lastUserMsg.content);
@@ -130,7 +162,7 @@ serve(async (req) => {
       }
     }
 
-    // 4. First pass: non-streaming call with tool calling to detect commands
+    // First pass: tool calling for command detection
     const classifyResponse = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
@@ -141,10 +173,7 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           model: "google/gemini-2.5-flash-lite",
-          messages: [
-            { role: "system", content: systemPrompt },
-            ...messages,
-          ],
+          messages: [{ role: "system", content: systemPrompt }, ...messages],
           tools: [COMMAND_TOOL],
           stream: false,
         }),
@@ -167,18 +196,16 @@ serve(async (req) => {
     const classifyData = await classifyResponse.json();
     const choice = classifyData.choices?.[0];
 
-    // Check if the AI decided to call the command tool
     if (choice?.message?.tool_calls?.length > 0) {
       const toolCall = choice.message.tool_calls[0];
       if (toolCall.function?.name === "execute_command") {
         const args = JSON.parse(toolCall.function.arguments);
-        // Return command JSON + a friendly message
         const commandResponse = {
           type: "command",
           action: args.action,
           target: args.target,
           data: args.data || null,
-          message: choice.message.content || `ঠিক আছে Boss, ${args.action === "search" ? `"${args.data}" সার্চ করছি` : `${args.target} খুলছি`}! 🚀`,
+          message: choice.message.content || `ঠিক আছে Boss, ${args.action === "search" ? `"${args.data}" search করছি` : `${args.target} খুলছি`}! 🚀`,
         };
         return new Response(JSON.stringify(commandResponse), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -186,7 +213,7 @@ serve(async (req) => {
       }
     }
 
-    // 5. Normal chat — stream the response
+    // Stream chat response
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
@@ -197,10 +224,7 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           model: "google/gemini-3-flash-preview",
-          messages: [
-            { role: "system", content: systemPrompt },
-            ...messages,
-          ],
+          messages: [{ role: "system", content: systemPrompt }, ...messages],
           stream: true,
         }),
       }
