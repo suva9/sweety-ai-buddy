@@ -14,8 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        mono: ["Roboto Mono", "monospace"],
-        sans: ["Inter", "sans-serif"],
+        display: ["Space Grotesk", "sans-serif"],
+        mono: ["JetBrains Mono", "monospace"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -51,15 +51,11 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        obsidian: "hsl(var(--obsidian))",
-        photon: "hsl(var(--photon))",
-        gold: "hsl(var(--gold))",
-        tungsten: "hsl(var(--tungsten))",
       },
       borderRadius: {
         lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        md: "calc(var(--radius) - 4px)",
+        sm: "calc(var(--radius) - 8px)",
       },
       keyframes: {
         "accordion-down": {
@@ -70,21 +66,25 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
-        "pulse-gold": {
-          "0%, 100%": { opacity: "0.4" },
-          "50%": { opacity: "1" },
+        "float": {
+          "0%, 100%": { transform: "translateY(0px) scale(1)" },
+          "50%": { transform: "translateY(-20px) scale(1.05)" },
         },
-        "waveform": {
-          "0%": { transform: "scaleY(0.3)" },
-          "50%": { transform: "scaleY(1)" },
-          "100%": { transform: "scaleY(0.3)" },
+        "pulse-glow": {
+          "0%, 100%": { opacity: "0.4", transform: "scale(0.95)" },
+          "50%": { opacity: "0.8", transform: "scale(1.05)" },
+        },
+        "spin-slow": {
+          "0%": { transform: "rotate(0deg)" },
+          "100%": { transform: "rotate(360deg)" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        "pulse-gold": "pulse-gold 2s ease-in-out infinite",
-        "waveform": "waveform 0.8s ease-in-out infinite",
+        "float": "float 6s ease-in-out infinite",
+        "pulse-glow": "pulse-glow 3s ease-in-out infinite",
+        "spin-slow": "spin-slow 20s linear infinite",
       },
     },
   },

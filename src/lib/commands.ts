@@ -78,7 +78,10 @@ function getBatteryInfo(): Promise<string> {
     const level = Math.round(battery.level * 100);
     const charging = battery.charging ? "⚡ চার্জ হচ্ছে" : "🔋 চার্জ হচ্ছে না";
     const icon = level > 80 ? "🟢" : level > 40 ? "🟡" : "🔴";
-    return `${icon} **Battery:** ${level}% — ${charging}`;
+    const timeLeft = battery.dischargingTime && battery.dischargingTime !== Infinity
+      ? `\n⏱️ **আর প্রায়:** ${Math.round(battery.dischargingTime / 60)} মিনিট`
+      : "";
+    return `${icon} **Battery:** ${level}% — ${charging}${timeLeft}`;
   });
 }
 
@@ -89,8 +92,43 @@ function getDeviceInfo(): string {
   const cores = navigator.hardwareConcurrency || "Unknown";
   const online = navigator.onLine ? "🟢 Online" : "🔴 Offline";
   const memory = (navigator as any).deviceMemory ? `${(navigator as any).deviceMemory} GB` : "Unknown";
+  const screenW = screen.width;
+  const screenH = screen.height;
+  const pixelRatio = window.devicePixelRatio;
+  const connection = (navigator as any).connection;
+  const netInfo = connection ? `${connection.effectiveType || "unknown"} (${connection.downlink || "?"}Mbps)` : "Unknown";
 
-  return `📱 **Device Info:**\n- **Platform:** ${platform}\n- **Language:** ${lang}\n- **CPU Cores:** ${cores}\n- **RAM:** ${memory}\n- **Status:** ${online}\n- **User Agent:** \`${ua.slice(0, 80)}...\``;
+  return `📱 **Device Info:**\n- **Platform:** ${platform}\n- **Language:** ${lang}\n- **CPU Cores:** ${cores}\n- **RAM:** ${memory}\n- **Screen:** ${screenW}×${screenH} @${pixelRatio}x\n- **Network:** ${netInfo}\n- **Status:** ${online}\n- **User Agent:** \`${ua.slice(0, 100)}...\``;
+}
+
+function getNetworkInfo(): string {
+  const connection = (navigator as any).connection;
+  if (!connection) return "📶 Network info এই browser এ available নেই।";
+  const type = connection.effectiveType || "unknown";
+  const downlink = connection.downlink || "?";
+  const rtt = connection.rtt || "?";
+  const saveData = connection.saveData ? "হ্যাঁ" : "না";
+  return `📶 **Network Info:**\n- **Type:** ${type}\n- **Speed:** ${downlink} Mbps\n- **Latency:** ${rtt}ms\n- **Data Saver:** ${saveData}\n- **Online:** ${navigator.onLine ? "✅ হ্যাঁ" : "❌ না"}`;
+}
+
+function getStorageInfo(): Promise<string> {
+  if (!navigator.storage?.estimate) return Promise.resolve("💾 Storage info available নেই।");
+  return navigator.storage.estimate().then((est) => {
+    const used = ((est.usage || 0) / (1024 * 1024)).toFixed(1);
+    const total = ((est.quota || 0) / (1024 * 1024)).toFixed(0);
+    return `💾 **Storage:**\n- **Used:** ${used} MB\n- **Available:** ${total} MB`;
+  });
+}
+
+function getScreenInfo(): string {
+  const w = screen.width;
+  const h = screen.height;
+  const avW = screen.availWidth;
+  const avH = screen.availHeight;
+  const colorDepth = screen.colorDepth;
+  const orientation = screen.orientation?.type || "unknown";
+  const pixelRatio = window.devicePixelRatio;
+  return `🖥️ **Screen Info:**\n- **Resolution:** ${w}×${h}\n- **Available:** ${avW}×${avH}\n- **Color Depth:** ${colorDepth}bit\n- **Orientation:** ${orientation}\n- **Pixel Ratio:** ${pixelRatio}x`;
 }
 
 function calculate(expression: string): string | null {
@@ -105,6 +143,74 @@ function calculate(expression: string): string | null {
   } catch {
     return null;
   }
+}
+
+async function getLocation(): Promise<string> {
+  if (!navigator.geolocation) return "📍 Location এই browser এ available নেই।";
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        resolve(`📍 **Your Location:**\n- **Latitude:** ${latitude.toFixed(5)}\n- **Longitude:** ${longitude.toFixed(5)}\n- **Accuracy:** ${Math.round(accuracy)}m\n\n[📌 Google Maps এ দেখুন](https://www.google.com/maps?q=${latitude},${longitude})`);
+      },
+      (err) => resolve(`📍 Location access denied: ${err.message}`),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  });
+}
+
+function doVibrate(): string {
+  if (navigator.vibrate) {
+    navigator.vibrate([100, 50, 100, 50, 200]);
+    return "📳 Vibration sent! Boss, feel করলেন?";
+  }
+  return "📳 Vibration এই device এ support করে না।";
+}
+
+function toggleFullscreen(): string {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen?.();
+    return "🖥️ Fullscreen mode activated! Exit করতে আবার বলুন।";
+  } else {
+    document.exitFullscreen?.();
+    return "🖥️ Fullscreen mode exit করলাম!";
+  }
+}
+
+async function shareContent(): Promise<string> {
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: "Sweety AI Assistant",
+        text: "Check out Sweety — my personal AI assistant! 🚀",
+        url: window.location.href,
+      });
+      return "📤 Share dialog opened!";
+    } catch {
+      return "📤 Share cancelled.";
+    }
+  }
+  // Fallback: copy URL
+  try {
+    await navigator.clipboard.writeText(window.location.href);
+    return "📋 Link copied to clipboard! (Share API not available)";
+  } catch {
+    return "📤 Share not supported on this browser.";
+  }
+}
+
+async function copyToClipboard(text: string): Promise<string> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return `📋 Copied to clipboard: "${text.slice(0, 50)}${text.length > 50 ? "..." : ""}"`;
+  } catch {
+    return "📋 Clipboard access denied.";
+  }
+}
+
+function getColorScheme(): string {
+  const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  return `🎨 Device color scheme: **${isDark ? "Dark Mode 🌙" : "Light Mode ☀️"}**`;
 }
 
 const MOTIVATIONAL_QUOTES = [
@@ -126,6 +232,16 @@ const JOKES = [
   "WiFi password ভুললে কী হয়? Existential crisis! 😱📶",
   "Boss, জানেন JavaScript এর সবচেয়ে কঠিন অংশ কোনটা? — Undefined relationship! 💀",
   "Python কেন সবচেয়ে friendly language? কারণ সে সবাইকে indent করে welcome করে! 🐍",
+  "Boss, আমি ChatGPT কে বললাম আমাকে হারাতে — সে বললো 'আমি busy, তুমি already won!' 🏆",
+];
+
+const FACTS = [
+  "🧠 জানেন কি? মানুষের মস্তিষ্ক প্রতিদিন প্রায় ৭০,০০০ thoughts তৈরি করে!",
+  "🌍 পৃথিবীতে প্রায় ৭,০০০+ ভাষা আছে — আর আমি Boss এর ভাষা সবচেয়ে ভালো বুঝি! 😄",
+  "🚀 আলোর গতিতে চললে আপনি ১ সেকেন্ডে পৃথিবী ৭.৫ বার ঘুরতে পারবেন!",
+  "🐙 অক্টোপাসের ৩টা হৃদপিণ্ড আছে — আর আমার ০টা, তবুও Boss এর জন্য ভালোবাসা আছে! ❤️",
+  "🧬 মানুষের DNA এর ৯৯.৯% একই — তবে Boss unique! ✨",
+  "🌙 চাঁদ প্রতি বছর পৃথিবী থেকে ৩.৮ সেমি দূরে সরে যাচ্ছে!",
 ];
 
 export function executeCommand(cmd: CommandResult) {
@@ -167,6 +283,58 @@ export async function parseDirectCommand(input: string): Promise<CommandResult |
     return { type: "command", action: "utility", target: "device", data: null, message: getDeviceInfo() };
   }
 
+  // Network info
+  if (/(?:network|internet speed|নেটওয়ার্ক|ইন্টারনেট|wifi|connection info)/i.test(lower)) {
+    return { type: "command", action: "utility", target: "network", data: null, message: getNetworkInfo() };
+  }
+
+  // Storage info
+  if (/(?:storage|memory|স্টোরেজ|মেমোরি|disk space)/i.test(lower)) {
+    const info = await getStorageInfo();
+    return { type: "command", action: "utility", target: "storage", data: null, message: info };
+  }
+
+  // Screen info
+  if (/(?:screen info|display|resolution|স্ক্রিন)/i.test(lower)) {
+    return { type: "command", action: "utility", target: "screen", data: null, message: getScreenInfo() };
+  }
+
+  // Location
+  if (/(?:my location|where am i|আমি কোথায়|location|অবস্থান|gps)/i.test(lower)) {
+    const info = await getLocation();
+    return { type: "command", action: "utility", target: "location", data: null, message: info };
+  }
+
+  // Vibrate
+  if (/(?:vibrate|ভাইব্রেট|কম্পন)/i.test(lower)) {
+    return { type: "command", action: "utility", target: "vibrate", data: null, message: doVibrate() };
+  }
+
+  // Fullscreen
+  if (/(?:fullscreen|full screen|ফুলস্ক্রিন)/i.test(lower)) {
+    return { type: "command", action: "utility", target: "fullscreen", data: null, message: toggleFullscreen() };
+  }
+
+  // Share
+  if (/(?:share|শেয়ার)/i.test(lower)) {
+    const msg = await shareContent();
+    return { type: "command", action: "utility", target: "share", data: null, message: msg };
+  }
+
+  // Copy to clipboard
+  if (/^(?:copy|কপি)\s+(.+)$/i.test(lower)) {
+    const match = trimmed.match(/^(?:copy|কপি)\s+(.+)$/i);
+    if (match) {
+      const msg = await copyToClipboard(match[1]);
+      return { type: "command", action: "utility", target: "clipboard", data: null, message: msg };
+    }
+  }
+
+  // Color scheme / theme
+  if (/(?:color scheme|theme|dark mode|light mode|থিম)/i.test(lower)) {
+    return { type: "command", action: "utility", target: "theme", data: null, message: getColorScheme() };
+  }
+
   // Calculator
   if (/^(?:calculate|calc|হিসাব)\s+(.+)$/i.test(lower)) {
     const match = trimmed.match(/^(?:calculate|calc|হিসাব)\s+(.+)$/i);
@@ -194,6 +362,12 @@ export async function parseDirectCommand(input: string): Promise<CommandResult |
     return { type: "command", action: "utility", target: "joke", data: null, message: joke };
   }
 
+  // Fun facts
+  if (/(?:fact|interesting|জানো কি|মজার তথ্য|fun fact|তথ্য)/i.test(lower)) {
+    const fact = FACTS[Math.floor(Math.random() * FACTS.length)];
+    return { type: "command", action: "utility", target: "fact", data: null, message: fact };
+  }
+
   // Flip a coin
   if (/(?:flip a coin|coin flip|toss|মুদ্রা|heads or tails)/i.test(lower)) {
     const result = Math.random() > 0.5 ? "🪙 **Heads!**" : "🪙 **Tails!**";
@@ -204,6 +378,26 @@ export async function parseDirectCommand(input: string): Promise<CommandResult |
   if (/(?:roll.*dice|dice roll|ডাইস)/i.test(lower)) {
     const result = Math.floor(Math.random() * 6) + 1;
     return { type: "command", action: "utility", target: "dice", data: null, message: `🎲 **${result}** এসেছে!` };
+  }
+
+  // Random number
+  if (/(?:random number|random|র‍্যান্ডম)/i.test(lower)) {
+    const num = Math.floor(Math.random() * 100) + 1;
+    return { type: "command", action: "utility", target: "random", data: null, message: `🎯 Random number: **${num}**` };
+  }
+
+  // Password generator
+  if (/(?:password|generate password|পাসওয়ার্ড)/i.test(lower)) {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
+    let pwd = "";
+    for (let i = 0; i < 16; i++) pwd += chars[Math.floor(Math.random() * chars.length)];
+    return { type: "command", action: "utility", target: "password", data: null, message: `🔐 **Generated Password:**\n\`${pwd}\`\n\n(16 characters, strong!)` };
+  }
+
+  // UUID generator
+  if (/(?:uuid|unique id|ইউনিক আইডি)/i.test(lower)) {
+    const uuid = crypto.randomUUID();
+    return { type: "command", action: "utility", target: "uuid", data: null, message: `🆔 **UUID:** \`${uuid}\`` };
   }
 
   // Search
