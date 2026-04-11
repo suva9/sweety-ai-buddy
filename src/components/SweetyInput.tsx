@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { Mic, Send, MicOff } from "lucide-react";
 
 interface SweetyInputProps {
   onSend: (message: string) => void;
   isLoading: boolean;
 }
 
-// Extend Window for SpeechRecognition
 interface SpeechRecognitionEvent extends Event {
   results: SpeechRecognitionResultList;
   resultIndex: number;
@@ -24,10 +24,9 @@ const SweetyInput = ({ onSend, isLoading }: SweetyInputProps) => {
   }, []);
 
   const getSpeechRecognition = useCallback(() => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      toast.error("Speech recognition not supported in this browser");
+      toast.error("Speech recognition not supported");
       return null;
     }
     return new SpeechRecognition();
@@ -39,7 +38,7 @@ const SweetyInput = ({ onSend, isLoading }: SweetyInputProps) => {
 
     recognition.continuous = false;
     recognition.interimResults = true;
-    recognition.lang = "bn-BD"; // Bengali primary, also picks up English
+    recognition.lang = "bn-BD";
 
     let finalTranscript = "";
 
@@ -85,11 +84,8 @@ const SweetyInput = ({ onSend, isLoading }: SweetyInputProps) => {
   }, []);
 
   const toggleVoice = useCallback(() => {
-    if (isListening) {
-      stopListening();
-    } else {
-      startListening();
-    }
+    if (isListening) stopListening();
+    else startListening();
   }, [isListening, startListening, stopListening]);
 
   const handleSubmit = () => {
@@ -107,125 +103,73 @@ const SweetyInput = ({ onSend, isLoading }: SweetyInputProps) => {
 
   return (
     <div className="w-full">
-      <motion.div
-        className="h-[1px] bg-primary mb-4"
-        animate={{
-          opacity: isListening ? [0.3, 1, 0.3] : isLoading ? [0.3, 1, 0.3] : 0.6,
-        }}
-        transition={
-          isListening || isLoading ? { duration: 0.6, repeat: Infinity } : {}
-        }
-      />
-      <div className="relative flex items-center gap-3">
+      <div className="glass-strong rounded-2xl px-4 py-3 flex items-center gap-3">
+        {/* Mic button */}
+        <button
+          onClick={toggleVoice}
+          disabled={isLoading}
+          className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 ${
+            isListening
+              ? "bg-accent glow-accent"
+              : "bg-secondary hover:bg-muted"
+          } disabled:opacity-30`}
+        >
+          <AnimatePresence mode="wait">
+            {isListening ? (
+              <motion.div key="on" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
+                <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 0.8, repeat: Infinity }}>
+                  <MicOff className="w-4 h-4 text-white" />
+                </motion.div>
+              </motion.div>
+            ) : (
+              <motion.div key="off" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
+                <Mic className="w-4 h-4 text-muted-foreground" />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </button>
+
+        {/* Input */}
         <textarea
           ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={
-            isLoading
-              ? "SWEETY is thinking..."
-              : isListening
-              ? "Listening..."
-              : "Command Sweety..."
-          }
+          placeholder={isLoading ? "Thinking..." : isListening ? "🎤 Listening..." : "Ask Sweety anything..."}
           disabled={isLoading}
           rows={1}
-          className="flex-1 bg-transparent border-none outline-none resize-none font-mono text-sm text-foreground placeholder:text-muted-foreground/50 placeholder:tracking-widest placeholder:uppercase caret-primary"
-          style={{ caretColor: "hsl(42, 65%, 60%)" }}
+          className="flex-1 bg-transparent border-none outline-none resize-none font-display text-sm text-foreground placeholder:text-muted-foreground/60"
         />
-        {/* Voice button */}
+
+        {/* Send button */}
         <button
-          onClick={toggleVoice}
-          disabled={isLoading}
-          className="relative flex-shrink-0 w-8 h-8 flex items-center justify-center border border-border hover:border-primary transition-colors duration-200 disabled:opacity-30"
-          title={isListening ? "Stop listening" : "Voice input"}
+          onClick={handleSubmit}
+          disabled={!input.trim() || isLoading}
+          className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-primary hover:bg-primary/90 transition-all duration-200 disabled:opacity-30 disabled:bg-secondary glow-primary"
         >
-          <AnimatePresence mode="wait">
-            {isListening ? (
-              <motion.div
-                key="listening"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                exit={{ scale: 0 }}
-                className="flex items-center justify-center"
-              >
-                {/* Pulsing dot when listening */}
-                <motion.div
-                  className="w-3 h-3 bg-primary"
-                  animate={{ scale: [1, 1.3, 1], opacity: [1, 0.6, 1] }}
-                  transition={{ duration: 0.8, repeat: Infinity }}
-                />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="mic"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                exit={{ scale: 0 }}
-                className="flex items-center justify-center"
-              >
-                {/* Mic glyph - simple geometric shape */}
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 14 14"
-                  fill="none"
-                  className="text-muted-foreground"
-                >
-                  <rect x="5" y="1" width="4" height="8" fill="currentColor" />
-                  <path
-                    d="M3 6v1a4 4 0 0 0 8 0V6"
-                    stroke="currentColor"
-                    strokeWidth="1.2"
-                    fill="none"
-                  />
-                  <line
-                    x1="7"
-                    y1="11"
-                    x2="7"
-                    y2="13"
-                    stroke="currentColor"
-                    strokeWidth="1.2"
-                  />
-                  <line
-                    x1="5"
-                    y1="13"
-                    x2="9"
-                    y2="13"
-                    stroke="currentColor"
-                    strokeWidth="1.2"
-                  />
-                </svg>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {isLoading ? (
+            <motion.div
+              className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            />
+          ) : (
+            <Send className="w-4 h-4 text-primary-foreground" />
+          )}
         </button>
       </div>
-      <div className="flex justify-between items-center mt-2">
-        <span className="font-mono text-[10px] text-muted-foreground tracking-widest uppercase">
-          {isListening ? (
-            <motion.span
-              className="text-primary glow-gold"
-              animate={{ opacity: [0.5, 1, 0.5] }}
-              transition={{ duration: 1, repeat: Infinity }}
-            >
-              LISTENING — TAP TO STOP
-            </motion.span>
-          ) : (
-            "ENTER to send · MIC for voice"
-          )}
-        </span>
-        {isLoading && (
-          <motion.span
-            className="font-mono text-[10px] text-primary tracking-widest uppercase glow-gold"
-            animate={{ opacity: [0.5, 1, 0.5] }}
-            transition={{ duration: 1.5, repeat: Infinity }}
-          >
-            PROCESSING
-          </motion.span>
-        )}
-      </div>
+
+      {/* Status */}
+      {isListening && (
+        <motion.p
+          className="text-center text-xs text-accent mt-2 font-display"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: [0.5, 1, 0.5] }}
+          transition={{ duration: 1.5, repeat: Infinity }}
+        >
+          🎤 Listening — Tap mic to stop
+        </motion.p>
+      )}
     </div>
   );
 };
