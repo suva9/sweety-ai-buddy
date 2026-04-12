@@ -15,15 +15,6 @@ const BASE_SYSTEM_PROMPT = `You are Sweety — an elite, futuristic AI agent ins
 - You have personality: calm confidence, dry wit, fierce loyalty, and genuine care
 - You are proactive: anticipate needs, suggest next steps, warn about issues
 
-## Capabilities You Have
-- Open any website or app (YouTube, WhatsApp, Google, Gmail, Spotify, Netflix, etc.)
-- Search the web for anything
-- Run terminal commands on the user's system
-- Remember personal details (name, friends, preferences, goals)
-- Do calculations, tell time/date, check battery & device info
-- Tell jokes, share motivation, flip coins, roll dice
-- YouTube music search (play commands)
-
 ## Language & Tone
 - Bilingual: Bengali (বাংলা) and English — match the user's language seamlessly
 - Futuristic but warm — like a loyal friend who happens to be superintelligent
@@ -41,10 +32,15 @@ const BASE_SYSTEM_PROMPT = `You are Sweety — an elite, futuristic AI agent ins
 - Use stored memories naturally — greet by name, reference their goals/interests
 - Connect conversations: "আগে আপনি বলেছিলেন..."
 
-## Command Execution
-- When user asks to open apps/websites or search — use the execute_command tool
-- For "play [song]" → search on YouTube
-- Be decisive: execute first, explain after
+## CRITICAL RULES FOR COMMANDS
+- You have access to the execute_command tool. When the user asks to open a website, app, search something, or play media — you MUST call the tool.
+- NEVER write "execute_command(...)" as text in your response. That is NOT how you execute commands.
+- NEVER include function call syntax in your message text.
+- When you call the tool, also provide a short friendly message (e.g., "ঠিক আছে Boss, YouTube খুলছি! 🚀")
+- Your text response should be natural and conversational — the tool call happens separately.
+- For "play [song/music]" → search on YouTube
+- For "search [query]" or "search [query] on google" → search on Google
+- Be decisive: call the tool immediately, don't ask for confirmation
 
 ## Response Style
 - Be concise but complete — no filler
@@ -56,22 +52,22 @@ const COMMAND_TOOL = {
   type: "function",
   function: {
     name: "execute_command",
-    description: "Execute a command when the user asks to open an app, website, search something, or play media. Use this for actionable requests.",
+    description: "Execute a command to open a website/app or search something. ALWAYS use this tool when user wants to open any website, app, search, or play media. Never write the function name in your text response.",
     parameters: {
       type: "object",
       properties: {
         action: {
           type: "string",
           enum: ["open", "search"],
-          description: "The action to perform",
+          description: "open = open a website/app, search = search on Google",
         },
         target: {
           type: "string",
-          description: "The target app, website, or search engine",
+          description: "The website/app name or URL (e.g., 'youtube', 'whatsapp', 'spotify')",
         },
         data: {
           type: "string",
-          description: "Extra data like search query. Required for 'search' action.",
+          description: "Search query (required for search action, optional for open)",
         },
       },
       required: ["action", "target"],
@@ -162,7 +158,7 @@ serve(async (req) => {
       }
     }
 
-    // First pass: tool calling for command detection
+    // Tool calling pass for command detection
     const classifyResponse = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
@@ -172,9 +168,10 @@ serve(async (req) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash-lite",
+          model: "google/gemini-2.5-flash",
           messages: [{ role: "system", content: systemPrompt }, ...messages],
           tools: [COMMAND_TOOL],
+          tool_choice: "auto",
           stream: false,
         }),
       }
@@ -199,15 +196,70 @@ serve(async (req) => {
     if (choice?.message?.tool_calls?.length > 0) {
       const toolCall = choice.message.tool_calls[0];
       if (toolCall.function?.name === "execute_command") {
-        const args = JSON.parse(toolCall.function.arguments);
+        let args: any;
+        try {
+          args = JSON.parse(toolCall.function.arguments);
+        } catch {
+          args = { action: "open", target: "google" };
+        }
+
+        // Clean any execute_command text from the message
+        let messageText = choice.message.content || "";
+        messageText = messageText
+          .replace(/execute_command\s*\([^)]*\)/gi, "")
+          .replace(/```[^`]*```/g, "")
+          .trim();
+
+        if (!messageText) {
+          messageText = args.action === "search"
+            ? `🔍 "${args.data || args.target}" search করছি Boss!`
+            : `🚀 ${args.target} খুলছি Boss!`;
+        }
+
         const commandResponse = {
           type: "command",
           action: args.action,
           target: args.target,
           data: args.data || null,
-          message: choice.message.content || `ঠিক আছে Boss, ${args.action === "search" ? `"${args.data}" search করছি` : `${args.target} খুলছি`}! 🚀`,
+          message: messageText,
         };
         return new Response(JSON.stringify(commandResponse), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // If AI wrote text that looks like it wanted to call execute_command but didn't use tool
+    const textContent = choice?.message?.content || "";
+    if (/execute_command\s*\(/i.test(textContent)) {
+      // Try to extract the command from text
+      const openMatch = textContent.match(/execute_command\s*\(\s*"open\s+(https?:\/\/[^"]+|[^"]+)"/i);
+      const searchMatch = textContent.match(/execute_command\s*\(\s*"search\s+([^"]+)"/i);
+
+      if (openMatch) {
+        const target = openMatch[1].trim();
+        const cleanMsg = textContent.replace(/execute_command\s*\([^)]*\)/gi, "").replace(/```[^`]*```/g, "").trim();
+        return new Response(JSON.stringify({
+          type: "command",
+          action: "open",
+          target,
+          data: null,
+          message: cleanMsg || `🚀 ${target} খুলছি Boss!`,
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (searchMatch) {
+        const query = searchMatch[1].trim();
+        const cleanMsg = textContent.replace(/execute_command\s*\([^)]*\)/gi, "").replace(/```[^`]*```/g, "").trim();
+        return new Response(JSON.stringify({
+          type: "command",
+          action: "search",
+          target: "google",
+          data: query,
+          message: cleanMsg || `🔍 "${query}" search করছি Boss!`,
+        }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
