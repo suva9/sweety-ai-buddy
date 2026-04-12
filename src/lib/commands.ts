@@ -190,7 +190,6 @@ async function shareContent(): Promise<string> {
       return "📤 Share cancelled.";
     }
   }
-  // Fallback: copy URL
   try {
     await navigator.clipboard.writeText(window.location.href);
     return "📋 Link copied to clipboard! (Share API not available)";
@@ -213,6 +212,101 @@ function getColorScheme(): string {
   return `🎨 Device color scheme: **${isDark ? "Dark Mode 🌙" : "Light Mode ☀️"}**`;
 }
 
+// ─── Reminder / Timer ────────────────────────
+const activeReminders: { id: number; label: string; timeoutId: ReturnType<typeof setTimeout> }[] = [];
+let reminderIdCounter = 1;
+
+function parseTimeInput(input: string): number | null {
+  // "5 min", "10 minutes", "1 hour", "30 sec", "2 ঘণ্টা", "৫ মিনিট"
+  const banglaDigits: Record<string, string> = { "০": "0", "১": "1", "২": "2", "৩": "3", "৪": "4", "৫": "5", "৬": "6", "৭": "7", "৮": "8", "৯": "9" };
+  let normalized = input;
+  for (const [bn, en] of Object.entries(banglaDigits)) {
+    normalized = normalized.replace(new RegExp(bn, "g"), en);
+  }
+
+  const match = normalized.match(/(\d+)\s*(sec|second|সেকেন্ড|min|minute|মিনিট|hour|ঘণ্টা|hr)/i);
+  if (!match) return null;
+  const num = parseInt(match[1]);
+  const unit = match[2].toLowerCase();
+  if (/^(sec|second|সেকেন্ড)/.test(unit)) return num * 1000;
+  if (/^(min|minute|মিনিট)/.test(unit)) return num * 60 * 1000;
+  if (/^(hour|hr|ঘণ্টা)/.test(unit)) return num * 3600 * 1000;
+  return null;
+}
+
+function setReminder(input: string): string {
+  const ms = parseTimeInput(input);
+  if (!ms) return "⏰ Boss, সময়টা বুঝতে পারলাম না। এভাবে বলুন: 'remind me in 5 minutes to drink water'";
+
+  // Extract the reminder text
+  const textMatch = input.match(/(?:to|that|for|জন্য|করতে)\s+(.+)$/i);
+  const label = textMatch ? textMatch[1].trim() : "Reminder";
+
+  const id = reminderIdCounter++;
+  const minutes = Math.round(ms / 60000);
+  const display = minutes >= 60 ? `${Math.round(minutes / 60)} ঘণ্টা` : `${minutes} মিনিট`;
+
+  const timeoutId = setTimeout(() => {
+    // Show notification
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification("⏰ Sweety Reminder", { body: label, icon: "/placeholder.svg" });
+    }
+    // Also vibrate
+    navigator.vibrate?.([200, 100, 200, 100, 300]);
+
+    // Dispatch custom event so SweetyInterface can show the reminder in chat
+    window.dispatchEvent(new CustomEvent("sweety-reminder", { detail: { id, label } }));
+  }, ms);
+
+  activeReminders.push({ id, label, timeoutId });
+
+  // Request notification permission
+  if ("Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+
+  return `⏰ **Reminder set!**\n\n📝 **"${label}"**\n⏱️ **${display} পর** মনে করাবো Boss!\n\nRelax করুন, আমি ঠিক সময়ে জানাবো! 🔔`;
+}
+
+function setTimer(input: string): string {
+  const ms = parseTimeInput(input);
+  if (!ms) return "⏱️ Boss, সময়টা বুঝতে পারলাম না। এভাবে বলুন: 'set timer 5 minutes'";
+
+  const id = reminderIdCounter++;
+  const minutes = Math.round(ms / 60000);
+  const seconds = Math.round(ms / 1000);
+  const display = minutes >= 1 ? `${minutes} মিনিট` : `${seconds} সেকেন্ড`;
+
+  const timeoutId = setTimeout(() => {
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification("⏱️ Timer Done!", { body: `${display} timer শেষ হয়েছে Boss!`, icon: "/placeholder.svg" });
+    }
+    navigator.vibrate?.([300, 100, 300, 100, 500]);
+    window.dispatchEvent(new CustomEvent("sweety-reminder", { detail: { id, label: `⏱️ Timer (${display}) শেষ!` } }));
+  }, ms);
+
+  activeReminders.push({ id, label: `Timer ${display}`, timeoutId });
+
+  if ("Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+
+  return `⏱️ **Timer set: ${display}!**\n\nBoss, সময় হলেই জানাবো! 🔔`;
+}
+
+function getActiveReminders(): string {
+  if (activeReminders.length === 0) return "📋 কোনো active reminder নেই Boss।";
+  const list = activeReminders.map((r, i) => `${i + 1}. 📝 ${r.label}`).join("\n");
+  return `📋 **Active Reminders:**\n\n${list}`;
+}
+
+function clearAllReminders(): string {
+  for (const r of activeReminders) clearTimeout(r.timeoutId);
+  activeReminders.length = 0;
+  return "🗑️ সব reminders clear করে দিলাম Boss!";
+}
+
+// ─── Quotes & Jokes ──────────────────────────
 const MOTIVATIONAL_QUOTES = [
   "\"The only way to do great work is to love what you do.\" — Steve Jobs",
   "\"Success is not final, failure is not fatal: It is the courage to continue that counts.\" — Winston Churchill",
@@ -258,6 +352,16 @@ export function executeCommand(cmd: CommandResult) {
   }
 }
 
+/** Strip any execute_command() text that AI accidentally put in response */
+export function cleanAIResponse(text: string): string {
+  return text
+    .replace(/execute_command\s*\([^)]*\)/gi, "")
+    .replace(/```\s*execute_command[^`]*```/gi, "")
+    .replace(/`execute_command[^`]*`/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export async function parseDirectCommand(input: string): Promise<CommandResult | null> {
   const trimmed = input.trim();
   const lower = trimmed.toLowerCase();
@@ -270,6 +374,23 @@ export async function parseDirectCommand(input: string): Promise<CommandResult |
   // Greeting
   if (/^(?:hi|hello|hey|হাই|হ্যালো|কেমন আছ|কি খবর|assalamu|good morning|good evening|good night)/i.test(lower)) {
     return { type: "command", action: "utility", target: "greeting", data: null, message: getGreeting() };
+  }
+
+  // Reminder
+  if (/(?:remind|reminder|মনে করাও|মনে করাবে|রিমাইন্ডার)/i.test(lower)) {
+    if (/(?:list|show|active|দেখাও|কি কি)/i.test(lower)) return { type: "command", action: "utility", target: "reminder", data: null, message: getActiveReminders() };
+    if (/(?:clear|delete|cancel|বাতিল|মুছে দাও)/i.test(lower)) return { type: "command", action: "utility", target: "reminder", data: null, message: clearAllReminders() };
+    return { type: "command", action: "utility", target: "reminder", data: null, message: setReminder(trimmed) };
+  }
+
+  // Timer
+  if (/(?:timer|set timer|টাইমার|countdown)/i.test(lower)) {
+    return { type: "command", action: "utility", target: "timer", data: null, message: setTimer(trimmed) };
+  }
+
+  // Alarm (treated as timer)
+  if (/(?:alarm|অ্যালার্ম|set alarm)/i.test(lower)) {
+    return { type: "command", action: "utility", target: "timer", data: null, message: setTimer(trimmed) };
   }
 
   // Battery
@@ -400,12 +521,18 @@ export async function parseDirectCommand(input: string): Promise<CommandResult |
     return { type: "command", action: "utility", target: "uuid", data: null, message: `🆔 **UUID:** \`${uuid}\`` };
   }
 
-  // Search
-  const searchMatch = trimmed.match(/^(?:(?:hey|hi|hello|ok|okay)\s+sweety\s+)?search\s+(.+)$/i);
+  // Search (with various patterns)
+  const searchMatch = trimmed.match(/^(?:(?:hey|hi|hello|ok|okay)\s+sweety\s+)?search\s+(.+?)(?:\s+on\s+google)?$/i);
   if (searchMatch) {
-    const query = searchMatch[1].replace(/\s+on\s+google$/i, "").trim();
+    const query = searchMatch[1].trim();
     if (!query) return null;
     return { type: "command", action: "search", target: "google", data: query, message: `🔍 Searching "${query}"` };
+  }
+
+  // "search X on google" variant
+  const searchOnMatch = trimmed.match(/^search\s+(.+?)\s+on\s+google$/i);
+  if (searchOnMatch) {
+    return { type: "command", action: "search", target: "google", data: searchOnMatch[1].trim(), message: `🔍 Google এ "${searchOnMatch[1].trim()}" search করছি` };
   }
 
   // Google search shorthand
@@ -427,7 +554,7 @@ export async function parseDirectCommand(input: string): Promise<CommandResult |
     };
   }
 
-  // Open
+  // Open (must be near the end to avoid catching other patterns)
   const openMatch = trimmed.match(/^(?:(?:hey|hi|hello|ok|okay)\s+sweety\s+)?(?:open|go to|visit|launch|খোলো|ওপেন)\s+(.+)$/i);
   if (openMatch) {
     const target = normalizeTarget(openMatch[1]);

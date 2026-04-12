@@ -8,10 +8,10 @@ import { useMemories } from "@/hooks/useMemories";
 import { toast } from "sonner";
 import {
   Brain, Volume2, VolumeX, Clock, Battery, Smartphone, Calculator,
-  Sparkles, Zap, Globe, Music, Copy, Share2, Vibrate, Maximize,
-  Sun, Moon, Wifi, MapPin,
+  Sparkles, Zap, Globe, Music, Share2, Vibrate, Maximize,
+  MapPin, Bell, Timer,
 } from "lucide-react";
-import { CommandResult, executeCommand, parseDirectCommand } from "@/lib/commands";
+import { CommandResult, executeCommand, parseDirectCommand, cleanAIResponse } from "@/lib/commands";
 
 type Msg = { role: "user" | "assistant"; content: string; command?: CommandResult | null };
 
@@ -25,8 +25,8 @@ const QUICK_ACTIONS = [
   { icon: Globe, label: "YouTube", command: "open youtube", color: "from-red-500 to-rose-400" },
   { icon: Music, label: "Lofi", command: "play lofi music", color: "from-indigo-500 to-blue-400" },
   { icon: Share2, label: "শেয়ার", command: "share this page", color: "from-teal-500 to-cyan-400" },
-  { icon: Vibrate, label: "Vibrate", command: "vibrate", color: "from-fuchsia-500 to-pink-400" },
-  { icon: Maximize, label: "Fullscreen", command: "fullscreen", color: "from-slate-500 to-gray-400" },
+  { icon: Bell, label: "Reminder", command: "remind me in 5 minutes to take a break", color: "from-fuchsia-500 to-pink-400" },
+  { icon: Timer, label: "Timer", command: "set timer 2 minutes", color: "from-amber-500 to-yellow-400" },
   { icon: MapPin, label: "Location", command: "my location", color: "from-emerald-500 to-green-400" },
 ];
 
@@ -52,6 +52,22 @@ const SweetyInterface = () => {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Listen for reminder events
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      const reminderMsg: Msg = {
+        role: "assistant",
+        content: `🔔 **Reminder Alert!**\n\n📝 ${detail.label}\n\nBoss, এটা মনে করানোর সময় হয়েছে! ⏰`,
+      };
+      setMessages((prev) => [...prev, reminderMsg]);
+      speak(detail.label, `reminder-${detail.id}`).catch(() => {});
+      toast.info(`⏰ Reminder: ${detail.label}`);
+    };
+    window.addEventListener("sweety-reminder", handler);
+    return () => window.removeEventListener("sweety-reminder", handler);
+  }, [speak]);
 
   const handleSend = useCallback(async (input: string) => {
     const trimmedInput = input.trim();
@@ -88,7 +104,7 @@ const SweetyInterface = () => {
       return;
     }
 
-    // Direct commands
+    // Direct commands (local — instant)
     const directCommand = await parseDirectCommand(trimmedInput);
     if (directCommand) {
       const assistantMsg: Msg = {
@@ -129,18 +145,19 @@ const SweetyInterface = () => {
         const data = await resp.json();
         if (data.type === "command") {
           const command = data as CommandResult;
-          const cmdMsg = command.message || `Opening ${command.target}`;
-          const assistantMsg: Msg = { role: "assistant", content: `🚀 **Command Executed**\n\n${cmdMsg}`, command };
+          const cmdMsg = cleanAIResponse(command.message || `Opening ${command.target}`);
+          const assistantMsg: Msg = { role: "assistant", content: cmdMsg, command };
           setMessages((prev) => [...prev, assistantMsg]);
           executeCommand(command);
-          speak(cmdMsg, `msg-${newMessages.length}`).catch(() => {});
+          speak(cmdMsg.replace(/[*#`_\[\]()]/g, ""), `msg-${newMessages.length}`).catch(() => {});
           fetchMemories();
           setIsLoading(false);
           return;
         }
         if (data.type === "chat" && data.response) {
-          setMessages((prev) => [...prev, { role: "assistant", content: data.response }]);
-          speak(data.response, `msg-${newMessages.length}`).catch(() => {});
+          const cleaned = cleanAIResponse(data.response);
+          setMessages((prev) => [...prev, { role: "assistant", content: cleaned }]);
+          speak(cleaned.replace(/[*#`_\[\]()]/g, ""), `msg-${newMessages.length}`).catch(() => {});
           fetchMemories();
           setIsLoading(false);
           return;
@@ -155,12 +172,13 @@ const SweetyInterface = () => {
 
       const upsertAssistant = (chunk: string) => {
         assistantSoFar += chunk;
+        const cleaned = cleanAIResponse(assistantSoFar);
         setMessages((prev) => {
           const last = prev[prev.length - 1];
           if (last?.role === "assistant") {
-            return prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantSoFar } : m);
+            return prev.map((m, i) => i === prev.length - 1 ? { ...m, content: cleaned } : m);
           }
-          return [...prev, { role: "assistant", content: assistantSoFar }];
+          return [...prev, { role: "assistant", content: cleaned }];
         });
       };
 
@@ -189,7 +207,10 @@ const SweetyInterface = () => {
         }
       }
 
-      if (assistantSoFar) speak(assistantSoFar, `msg-${newMessages.length}`).catch(() => {});
+      if (assistantSoFar) {
+        const cleanedFinal = cleanAIResponse(assistantSoFar);
+        speak(cleanedFinal.replace(/[*#`_\[\]()]/g, ""), `msg-${newMessages.length}`).catch(() => {});
+      }
       fetchMemories();
     } catch (error) {
       console.error(error);
@@ -260,10 +281,8 @@ const SweetyInterface = () => {
               exit={{ opacity: 0 }}
               className="flex flex-col items-center justify-center min-h-[60vh] gap-5"
             >
-              {/* Orb */}
               <SweetyOrb size="lg" isProcessing={false} />
 
-              {/* Title */}
               <div className="text-center space-y-2">
                 <motion.div
                   className="inline-block px-3 py-1 rounded-full glass text-[10px] font-display text-primary tracking-widest uppercase"
