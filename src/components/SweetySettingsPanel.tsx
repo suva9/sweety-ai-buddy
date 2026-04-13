@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { X, Volume2, Palette, Globe, Zap } from "lucide-react";
-import { SweetySettings } from "@/hooks/useSettings";
+import type { SweetySettings } from "@/hooks/useSettings";
 
 interface SettingsPanelProps {
   open: boolean;
