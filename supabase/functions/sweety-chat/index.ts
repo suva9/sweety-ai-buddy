@@ -77,38 +77,53 @@ const COMMAND_TOOL = {
   },
 };
 
+// Stop extraction at punctuation/conjunctions so we don't capture entire sentences
+function cleanExtract(s: string): string {
+  return s
+    .split(/[.!?,;:'"\n]|(?:\s+(?:and|but|or|so|then|because|যে|আর|কিন্তু|তারপর)\s+)/i)[0]
+    .trim()
+    .replace(/[.!?,;:'"]+$/g, "")
+    .trim();
+}
+
 const MEMORY_PATTERNS = [
-  { regex: /my name is\s+(.+)/i, type: "identity", extract: (m: string[]) => `User's name is ${m[1].trim()}` },
-  { regex: /আমার নাম\s+(.+)/i, type: "identity", extract: (m: string[]) => `User's name is ${m[1].trim()}` },
-  { regex: /call me\s+(.+)/i, type: "identity", extract: (m: string[]) => `User wants to be called ${m[1].trim()}` },
-  { regex: /i(?:'m| am) a\s+(.+)/i, type: "identity", extract: (m: string[]) => `User is a ${m[1].trim()}` },
-  { regex: /i work (?:at|in|as)\s+(.+)/i, type: "identity", extract: (m: string[]) => `User works ${m[0].match(/work (.+)/i)![1].trim()}` },
-  { regex: /(.+?)\s+is my\s+(best friend|friend|brother|sister|wife|husband|girlfriend|boyfriend|partner|father|mother|dad|mom|colleague|boss|mentor|loyal friend)/i, type: "relationship", extract: (m: string[]) => `${m[1].trim()} is the user's ${m[2].trim()}` },
-  { regex: /my\s+(best friend|friend|brother|sister|wife|husband|girlfriend|boyfriend|partner|father|mother|dad|mom|colleague|boss|mentor|loyal friend)\s+is\s+(.+)/i, type: "relationship", extract: (m: string[]) => `${m[2].trim()} is the user's ${m[1].trim()}` },
-  { regex: /(.+?)\s+আমার\s+(বন্ধু|ভাই|বোন|বাবা|মা|স্ত্রী|স্বামী)/i, type: "relationship", extract: (m: string[]) => `${m[1].trim()} is the user's ${m[2].trim()}` },
-  { regex: /i(?:'m| am) interested in\s+(.+)/i, type: "interest", extract: (m: string[]) => `User is interested in ${m[1].trim()}` },
-  { regex: /i (?:like|love|enjoy)\s+(.+)/i, type: "interest", extract: (m: string[]) => `User likes ${m[1].trim()}` },
-  { regex: /আমি (.+) পছন্দ করি/i, type: "interest", extract: (m: string[]) => `User likes ${m[1].trim()}` },
-  { regex: /my (?:favorite|fav)\s+(\w+)\s+is\s+(.+)/i, type: "preference", extract: (m: string[]) => `User's favorite ${m[1].trim()} is ${m[2].trim()}` },
-  { regex: /i prefer\s+(.+)/i, type: "preference", extract: (m: string[]) => `User prefers ${m[1].trim()}` },
-  { regex: /my goal is\s+(.+)/i, type: "goal", extract: (m: string[]) => `User's goal is ${m[1].trim()}` },
-  { regex: /i want to\s+(.+)/i, type: "goal", extract: (m: string[]) => `User wants to ${m[1].trim()}` },
-  { regex: /আমি (.+) করতে চাই/i, type: "goal", extract: (m: string[]) => `User wants to ${m[1].trim()}` },
-  { regex: /remember that\s+(.+)/i, type: "general", extract: (m: string[]) => m[1].trim() },
-  { regex: /মনে রাখো?\s+(.+)/i, type: "general", extract: (m: string[]) => m[1].trim() },
-  { regex: /i live in\s+(.+)/i, type: "location", extract: (m: string[]) => `User lives in ${m[1].trim()}` },
-  { regex: /আমি (.+) থাকি/i, type: "location", extract: (m: string[]) => `User lives in ${m[1].trim()}` },
-  { regex: /my (?:age|বয়স) is\s+(\d+)/i, type: "identity", extract: (m: string[]) => `User's age is ${m[1]}` },
-  { regex: /i(?:'m| am) (\d+) years old/i, type: "identity", extract: (m: string[]) => `User is ${m[1]} years old` },
+  { regex: /\bmy name is\s+([A-Za-z\u0980-\u09FF][\w\u0980-\u09FF\s]{0,30})/i, type: "identity", extract: (m: string[]) => `User's name is ${cleanExtract(m[1])}` },
+  { regex: /আমার নাম\s+([\w\u0980-\u09FF\s]{1,30})/i, type: "identity", extract: (m: string[]) => `User's name is ${cleanExtract(m[1])}` },
+  { regex: /\bcall me\s+([A-Za-z\u0980-\u09FF][\w\u0980-\u09FF\s]{0,30})/i, type: "identity", extract: (m: string[]) => `User wants to be called ${cleanExtract(m[1])}` },
+  { regex: /\bi(?:'m| am) a\s+([\w\s]{2,40})/i, type: "identity", extract: (m: string[]) => `User is a ${cleanExtract(m[1])}` },
+  { regex: /\bi work (?:at|in|as)\s+([\w\s]{2,40})/i, type: "identity", extract: (m: string[]) => `User works at/as ${cleanExtract(m[1])}` },
+  { regex: /\b([A-Za-z\u0980-\u09FF][\w\u0980-\u09FF\s]{0,25})\s+is my\s+(best friend|friend|brother|sister|wife|husband|girlfriend|boyfriend|partner|father|mother|dad|mom|colleague|boss|mentor)/i, type: "relationship", extract: (m: string[]) => `${cleanExtract(m[1])} is the user's ${m[2].trim()}` },
+  { regex: /\bmy\s+(best friend|friend|brother|sister|wife|husband|girlfriend|boyfriend|partner|father|mother|dad|mom|colleague|boss|mentor)\s+is\s+([A-Za-z\u0980-\u09FF][\w\u0980-\u09FF\s]{0,25})/i, type: "relationship", extract: (m: string[]) => `${cleanExtract(m[2])} is the user's ${m[1].trim()}` },
+  { regex: /\bi(?:'m| am) interested in\s+([\w\s]{2,40})/i, type: "interest", extract: (m: string[]) => `User is interested in ${cleanExtract(m[1])}` },
+  { regex: /\bi (?:like|love|enjoy)\s+([\w\s]{2,40})/i, type: "interest", extract: (m: string[]) => `User likes ${cleanExtract(m[1])}` },
+  { regex: /আমি ([\u0980-\u09FF\s]{2,40}) পছন্দ করি/i, type: "interest", extract: (m: string[]) => `User likes ${cleanExtract(m[1])}` },
+  { regex: /\bmy (?:favorite|fav)\s+(\w+)\s+is\s+([\w\s]{2,40})/i, type: "preference", extract: (m: string[]) => `User's favorite ${m[1].trim()} is ${cleanExtract(m[2])}` },
+  { regex: /\bmy goal is\s+([\w\s]{2,60})/i, type: "goal", extract: (m: string[]) => `User's goal is ${cleanExtract(m[1])}` },
+  { regex: /\bremember that\s+(.{3,120})/i, type: "general", extract: (m: string[]) => cleanExtract(m[1]) },
+  { regex: /\bমনে রাখো?\s+(.{3,120})/i, type: "general", extract: (m: string[]) => cleanExtract(m[1]) },
+  { regex: /\bi live in\s+([\w\s,]{2,40})/i, type: "location", extract: (m: string[]) => `User lives in ${cleanExtract(m[1])}` },
+  { regex: /\bi(?:'m| am) (\d{1,3}) years old/i, type: "identity", extract: (m: string[]) => `User is ${m[1]} years old` },
 ];
 
+function isValidMemory(content: string): boolean {
+  if (!content || content.length < 4 || content.length > 200) return false;
+  if (/[?]|do you (?:remember|know)|then ask|and then/i.test(content)) return false;
+  if (/^(User's name is|User wants to be called)\s+(test|hi|hello|hey|ok|okay)\b/i.test(content)) return false;
+  return true;
+}
+
 function detectMemories(text: string): { content: string; type: string }[] {
+  if (text.trim().length < 8) return [];
+  if (/^(hi|hello|hey|ok|okay|yes|no|thanks|thank you|haha|lol|test)\.?$/i.test(text.trim())) return [];
   const memories: { content: string; type: string }[] = [];
   for (const pattern of MEMORY_PATTERNS) {
     const match = text.match(pattern.regex);
     if (match) {
-      memories.push({ content: pattern.extract(match), type: pattern.type });
-      break;
+      const content = pattern.extract(match);
+      if (isValidMemory(content)) {
+        memories.push({ content, type: pattern.type });
+        break;
+      }
     }
   }
   return memories;
@@ -150,12 +165,15 @@ serve(async (req) => {
 
     const systemPrompt = BASE_SYSTEM_PROMPT + memoryBlock;
 
-    // Detect and store new memories
+    // Detect and store new memories (with dedup against existing)
     const lastUserMsg = messages[messages.length - 1];
     if (lastUserMsg?.role === "user") {
       const detected = detectMemories(lastUserMsg.content);
+      const existing = new Set((memories || []).map((m: any) => m.content.toLowerCase().trim()));
       for (const mem of detected) {
-        await supabase.from("memories").insert(mem);
+        if (!existing.has(mem.content.toLowerCase().trim())) {
+          await supabase.from("memories").insert(mem);
+        }
       }
     }
 
