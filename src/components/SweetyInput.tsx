@@ -6,6 +6,7 @@ import { Mic, Send, MicOff } from "lucide-react";
 interface SweetyInputProps {
   onSend: (message: string) => void;
   isLoading: boolean;
+  language?: "auto" | "en" | "bn";
 }
 
 interface SpeechRecognitionEvent extends Event {
@@ -13,7 +14,7 @@ interface SpeechRecognitionEvent extends Event {
   resultIndex: number;
 }
 
-const SweetyInput = ({ onSend, isLoading }: SweetyInputProps) => {
+const SweetyInput = ({ onSend, isLoading, language = "auto" }: SweetyInputProps) => {
   const [input, setInput] = useState("");
   const [isListening, setIsListening] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -38,7 +39,7 @@ const SweetyInput = ({ onSend, isLoading }: SweetyInputProps) => {
 
     recognition.continuous = false;
     recognition.interimResults = true;
-    recognition.lang = "bn-BD";
+    recognition.lang = language === "en" ? "en-US" : language === "bn" ? "bn-BD" : "bn-BD";
 
     let finalTranscript = "";
 
@@ -75,7 +76,7 @@ const SweetyInput = ({ onSend, isLoading }: SweetyInputProps) => {
 
     recognitionRef.current = recognition;
     recognition.start();
-  }, [getSpeechRecognition]);
+  }, [getSpeechRecognition, language]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
