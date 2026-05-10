@@ -1,7 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 
+// Strips all emojis (pictographs, symbols, dingbats, flags, ZWJ sequences, variation selectors)
+const EMOJI_REGEX = /(\p{Extended_Pictographic}|\p{Emoji_Presentation}|\p{Emoji_Modifier}|\p{Emoji_Component}|\uFE0F|\u200D)/gu;
+
 function cleanForBrowserSpeech(text: string): string {
   return text
+    .replace(EMOJI_REGEX, "")
     .replace(/#{1,6}\s/g, "")
     .replace(/\*\*(.*?)\*\*/g, "$1")
     .replace(/\*(.*?)\*/g, "$1")
