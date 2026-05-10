@@ -43,6 +43,23 @@ function getSmartGreeting(): string {
   return "Good night, Boss. Need anything?";
 }
 
+const THINKING_PHRASES = ["Thinking...", "Analyzing...", "Processing...", "Almost there..."];
+const ThinkingIndicator = () => {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setIdx((i) => (i + 1) % THINKING_PHRASES.length), 1500);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3 px-4 py-3">
+      <SweetyOrb size="sm" isProcessing={true} />
+      <motion.span key={idx} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="text-xs text-muted-foreground font-display">
+        {THINKING_PHRASES[idx]}
+      </motion.span>
+    </motion.div>
+  );
+};
+
 const SweetyInterface = () => {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -168,9 +185,19 @@ const SweetyInterface = () => {
       return;
     }
 
-    // AI chat (streaming)
+    // Offline fallback
+    if (!navigator.onLine) {
+      const offlineMsg = "Boss, you're offline. Please check your internet connection.";
+      setMessages((prev) => [...prev, { role: "assistant", content: offlineMsg }]);
+      await finishAssistant(offlineMsg);
+      setIsLoading(false);
+      return;
+    }
+
+    // AI chat (streaming) — only send last 8 messages for context efficiency
     let assistantSoFar = "";
     const chatUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sweety-chat`;
+    const contextMessages = newMessages.slice(-8);
 
     try {
       const resp = await fetch(chatUrl, {
@@ -179,7 +206,7 @@ const SweetyInterface = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ messages: newMessages }),
+        body: JSON.stringify({ messages: contextMessages }),
       });
 
       if (resp.status === 429) { toast.error("Rate limit exceeded."); setIsLoading(false); return; }
@@ -441,27 +468,12 @@ const SweetyInterface = () => {
           />
         ))}
 
-        {isLoading && messages[messages.length - 1]?.role === "user" && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-3 px-4 py-3"
-          >
-            <SweetyOrb size="sm" isProcessing={true} />
-            <motion.span
-              className="text-xs text-muted-foreground font-display"
-              animate={{ opacity: [0.4, 1, 0.4] }}
-              transition={{ duration: 1.5, repeat: Infinity }}
-            >
-              Thinking...
-            </motion.span>
-          </motion.div>
-        )}
+        {isLoading && messages[messages.length - 1]?.role === "user" && <ThinkingIndicator />}
       </div>
 
       {/* Input */}
       <div className="relative z-10 px-4 pb-5 pt-2">
-        <SweetyInput onSend={handleSend} isLoading={isLoading} />
+        <SweetyInput onSend={handleSend} isLoading={isLoading} language={settings.language} />
       </div>
     </div>
   );
