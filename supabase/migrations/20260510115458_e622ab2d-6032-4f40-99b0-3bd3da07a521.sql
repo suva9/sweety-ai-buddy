@@ -1,0 +1,1 @@
+DELETE FROM public.memories WHERE content ILIKE '%then ask%' OR content ILIKE '%do you remember%' OR content ILIKE '%আমার সাইডে%' OR length(content) > 150;
