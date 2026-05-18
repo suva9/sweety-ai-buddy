@@ -360,7 +360,9 @@ const SweetyInterface = () => {
           </div>
           <div>
             <h1 className="font-display text-sm font-semibold tracking-wide text-foreground">Sweety</h1>
-            <p className="text-[9px] text-primary/80 font-display">Online</p>
+            <p className="text-[9px] text-primary/80 font-display">
+              Online{isDesktop && <span className="ml-1 px-1 py-px rounded bg-primary/20 text-primary">Desktop</span>}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
