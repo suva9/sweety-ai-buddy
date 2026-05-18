@@ -214,7 +214,7 @@ const SweetyInterface = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ messages: contextMessages }),
+        body: JSON.stringify({ messages: contextMessages, desktopMode: isDesktop }),
       });
 
       if (resp.status === 429) { toast.error("Rate limit exceeded."); setIsLoading(false); return; }

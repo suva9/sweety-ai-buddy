@@ -141,7 +141,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages } = await req.json();
+    const { messages, desktopMode } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
@@ -169,7 +169,10 @@ serve(async (req) => {
       memoryBlock = `\n\n--- USER MEMORIES ---\nUse these to personalize responses naturally.\n\n${sections}\n--- END MEMORIES ---`;
     }
 
-    const systemPrompt = BASE_SYSTEM_PROMPT + memoryBlock;
+    const desktopBlock = desktopMode
+      ? `\n\n--- DESKTOP MODE ACTIVE ---\nUser is running Sweety as a native desktop app. You have real local powers via window.sweetyDesktop: run shell commands, launch native apps, control clipboard, send OS notifications, read system info. When user asks to run something on their PC, tell them to phrase it as \`run command: <cmd>\` — it executes locally, no tunnel. Lean into the full JARVIS vibe here.\n--- END DESKTOP MODE ---`
+      : "";
+    const systemPrompt = BASE_SYSTEM_PROMPT + memoryBlock + desktopBlock;
 
     // Detect and store new memories (with dedup against existing)
     const lastUserMsg = messages[messages.length - 1];
