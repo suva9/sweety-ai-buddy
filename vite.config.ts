@@ -5,6 +5,8 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  // Relative base when building for Electron so file:// loads work
+  base: process.env.VITE_TARGET === "electron" ? "./" : "/",
   server: {
     host: "::",
     port: 8080,

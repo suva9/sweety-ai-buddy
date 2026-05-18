@@ -16,6 +16,7 @@ import {
   MapPin, Menu, Settings, Plus,
 } from "lucide-react";
 import { CommandResult, executeCommand, parseDirectCommand, cleanAIResponse } from "@/lib/commands";
+import { isDesktop, desktopExec } from "@/lib/desktopBridge";
 
 type Msg = { role: "user" | "assistant"; content: string; command?: CommandResult | null };
 
