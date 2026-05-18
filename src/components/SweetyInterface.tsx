@@ -148,24 +148,31 @@ const SweetyInterface = () => {
       }
     };
 
-    // Terminal command
+    // Terminal command — prefer local desktop bridge, fall back to tunnel
     const terminalMatch = trimmedInput.match(/^run\s+command:\s*(.+)$/i);
     if (terminalMatch) {
       const shellCmd = terminalMatch[1].trim();
       try {
-        const termResp = await fetch("https://james-uniprotkb-cyber-killing.trycloudflare.com/command", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ command: shellCmd }),
-        });
-        if (!termResp.ok) throw new Error(`Terminal server returned ${termResp.status}`);
-        const termData = await termResp.json();
-        const output = termData.output || termData.response || termData.result || JSON.stringify(termData);
-        const content = `**Terminal Output**\n\`\`\`\n${output}\n\`\`\``;
+        let output: string;
+        if (isDesktop) {
+          output = await desktopExec(shellCmd);
+        } else {
+          const termResp = await fetch("https://james-uniprotkb-cyber-killing.trycloudflare.com/command", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ command: shellCmd }),
+          });
+          if (!termResp.ok) throw new Error(`Terminal server returned ${termResp.status}`);
+          const termData = await termResp.json();
+          output = termData.output || termData.response || termData.result || JSON.stringify(termData);
+        }
+        const content = `**Terminal Output**${isDesktop ? " (local)" : ""}\n\`\`\`\n${output}\n\`\`\``;
         setMessages((prev) => [...prev, { role: "assistant", content }]);
         await finishAssistant(content);
-      } catch {
-        const errMsg = "Boss, can't connect to terminal server right now.";
+      } catch (err) {
+        const errMsg = isDesktop
+          ? `Boss, local command failed: ${(err as Error).message}`
+          : "Boss, can't connect to terminal server right now.";
         setMessages((prev) => [...prev, { role: "assistant", content: errMsg }]);
         await finishAssistant(errMsg);
       }
